@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>株式シミュレーション ダッシュボード</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>日本株シミュレーション</h1>
+    <div class="header-right">
+      <select id="run-selector"></select>
+      <span id="last-updated">読み込み中...</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- サマリカード -->
+    <section class="summary-grid">
+      <div class="card">
+        <div class="card-label">現金残高</div>
+        <div class="card-value" id="cash">--</div>
+      </div>
+      <div class="card">
+        <div class="card-label">ロング評価額</div>
+        <div class="card-value" id="long-value">--</div>
+      </div>
+      <div class="card">
+        <div class="card-label">ショート建玉</div>
+        <div class="card-value" id="short-exposure">--</div>
+      </div>
+      <div class="card">
+        <div class="card-label">総資産</div>
+        <div class="card-value" id="total-value">--</div>
+      </div>
+      <div class="card">
+        <div class="card-label">損益</div>
+        <div class="card-value" id="pnl">--</div>
+      </div>
+      <div class="card">
+        <div class="card-label">損益率</div>
+        <div class="card-value" id="pnl-pct">--</div>
+      </div>
+    </section>
+
+    <!-- 総資産推移 -->
+    <section class="section">
+      <h2>総資産推移（時価評価）</h2>
+      <p class="chart-note">現金 ＋ ロング評価 − ショート建玉</p>
+      <div class="chart-container">
+        <canvas id="total-chart"></canvas>
+      </div>
+    </section>
+
+    <!-- 現金残高推移 -->
+    <section class="section">
+      <h2>現金残高推移</h2>
+      <p class="chart-note">取引後の手元現金のみ</p>
+      <div class="chart-container">
+        <canvas id="cash-chart"></canvas>
+      </div>
+    </section>
+
+    <!-- ロングポジション -->
+    <section class="section">
+      <h2>ロングポジション（現物）</h2>
+      <div id="long-positions-wrapper">
+        <p class="empty-msg">ポジションなし</p>
+      </div>
+    </section>
+
+    <!-- ショートポジション -->
+    <section class="section">
+      <h2>ショートポジション（空売り）</h2>
+      <div id="short-positions-wrapper">
+        <p class="empty-msg">ポジションなし</p>
+      </div>
+    </section>
+
+    <!-- 取引履歴 -->
+    <section class="section">
+      <h2>取引履歴</h2>
+      <div class="table-scroll">
+        <table id="trades-table">
+          <thead>
+            <tr>
+              <th>日付</th>
+              <th>銘柄</th>
+              <th>売買</th>
+              <th>株数</th>
+              <th>価格</th>
+              <th>ステータス</th>
+              <th>残高</th>
+            </tr>
+          </thead>
+          <tbody id="trades-body">
+            <tr><td colspan="7" class="empty-msg">データなし</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
