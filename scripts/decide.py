@@ -7,6 +7,7 @@ import sys, io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
+import argparse
 import csv
 import json
 import logging
@@ -21,6 +22,16 @@ sys.path.insert(0, str(Path(__file__).parent))
 import claude_agent
 import fetch_data
 from portfolio import Portfolio
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+logger = logging.getLogger(__name__)
+
+RUNS_JSON = REPO_ROOT / 'data' / 'runs.json'
+CONFIG_PATH = REPO_ROOT / 'config.json'
 
 
 def git_push(today_str: str, step: str) -> None:
@@ -39,16 +50,6 @@ def git_push(today_str: str, step: str) -> None:
             logger.warning(f'git {cmd[1]} 失敗: {r.stderr[:200]}')
             return
     logger.info('git push 完了')
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-logger = logging.getLogger(__name__)
-
-RUNS_JSON = REPO_ROOT / 'data' / 'runs.json'
-CONFIG_PATH = REPO_ROOT / 'config.json'
 
 
 def load_config() -> dict:
@@ -91,13 +92,24 @@ def append_wait_trade(run_dir: Path, today_str: str, order: dict, cash: float) -
         w.writerow(row)
 
 
+def calc_days_remaining(end_date_str: str, today: date) -> tuple[int, int]:
+    end_dt = date.fromisoformat(end_date_str)
+    calendar_days = max(0, (end_dt - today).days)
+    market_days = max(0, round(calendar_days * 5 / 7))
+    return calendar_days, market_days
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--force', action='store_true', help='週末・休日・重複チェックを無視して強制実行')
+    args = parser.parse_args()
+
     today = date.today()
     today_str = today.strftime('%Y-%m-%d')
-    logger.info(f'[decide] {today_str} 売買判断ステップ開始')
+    logger.info(f'[decide] {today_str} 売買判断ステップ開始' + (' [--force]' if args.force else ''))
 
-    if today.weekday() >= 5:
-        logger.info('週末のためスキップ')
+    if today.weekday() >= 5 and not args.force:
+        logger.info('週末のためスキップ（--force で強制実行可）')
         return 0
 
     config = load_config()
@@ -108,7 +120,7 @@ def main() -> int:
         logger.info('アクティブな RUN がありません')
         return 0
 
-    logger.info(f'株価データ取得中 (共通)...')
+    logger.info('株価データ取得中 (共通)...')
     ohlcv = fetch_data.fetch_ohlcv(config['stocks'], config['lookback_days'])
     if not ohlcv:
         logger.error('株価データ取得失敗')
@@ -122,11 +134,14 @@ def main() -> int:
         logger.info(f'--- {run_id} ({run["name"]}) ---')
 
         pending_path = run_dir / 'pending_orders.json'
-        if pending_path.exists():
+        if pending_path.exists() and not args.force:
             existing = json.loads(pending_path.read_text(encoding='utf-8'))
             if existing.get('date') == today_str:
                 logger.info(f'{run_id}: 本日の意思決定済みスキップ')
                 continue
+
+        calendar_days, market_days = calc_days_remaining(run['end_date'], today)
+        logger.info(f'{run_id}: 終了まで残り約{market_days}営業日（暦日{calendar_days}日）')
 
         pf = Portfolio(str(run_dir / 'portfolio.json'))
         recent_trades = load_recent_trades(run_dir)
@@ -140,6 +155,8 @@ def main() -> int:
             recent_trades=recent_trades,
             current_prices=reference_prices,
             config=config,
+            days_remaining=calendar_days,
+            market_days_remaining=market_days,
         )
 
         pending_path.write_text(

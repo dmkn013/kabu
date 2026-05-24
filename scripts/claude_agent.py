@@ -16,7 +16,7 @@ STOCK_NAMES: dict[str, str] = {
     "6758": "ソニーグループ",
     "9984": "ソフトバンクグループ",
     "8306": "三菱UFJフィナンシャルG",
-    "6861": "キーエンス",
+    "6981": "村田製作所",
     "9432": "日本電信電話(NTT)",
     "8035": "東京エレクトロン",
     "7267": "本田技研工業",
@@ -43,6 +43,8 @@ def get_trading_decisions(
     recent_trades: list[dict],
     current_prices: dict[str, float],
     config: dict,
+    days_remaining: int = 0,
+    market_days_remaining: int = 0,
 ) -> list[dict]:
     prompt = _build_prompt(
         cash=cash,
@@ -51,9 +53,10 @@ def get_trading_decisions(
         ohlcv_data=ohlcv_data,
         recent_trades=recent_trades,
         current_prices=current_prices,
-        stocks=config['stocks'],
         max_long_pct=config.get('max_long_position_pct', 0.30),
         max_short_exp=config.get('max_short_exposure', 250000),
+        days_remaining=days_remaining,
+        market_days_remaining=market_days_remaining,
     )
 
     logger.info('Claude CLI を呼び出し中...')
@@ -91,9 +94,10 @@ def _build_prompt(
     ohlcv_data: dict[str, pd.DataFrame],
     recent_trades: list[dict],
     current_prices: dict[str, float],
-    stocks: list[str],
     max_long_pct: float,
     max_short_exp: float,
+    days_remaining: int,
+    market_days_remaining: int,
 ) -> str:
     from fetch_data import format_ohlcv_for_prompt
 
@@ -127,12 +131,11 @@ def _build_prompt(
 
     # OHLCV
     ohlcv_lines = []
-    for sym in stocks:
-        if sym in ohlcv_data and not ohlcv_data[sym].empty:
-            ohlcv_lines.append(format_ohlcv_for_prompt(sym, ohlcv_data[sym], last_n=5))
-        else:
-            ohlcv_lines.append(f'{sym}: データなし')
-    ohlcv_str = '\n'.join(ohlcv_lines)
+    for sym, df in ohlcv_data.items():
+        if not df.empty:
+            name = STOCK_NAMES.get(sym, sym)
+            ohlcv_lines.append(format_ohlcv_for_prompt(f'{sym}({name})', df, last_n=5))
+    ohlcv_str = '\n'.join(ohlcv_lines) if ohlcv_lines else '  データなし'
 
     # 直近取引
     if recent_trades:
@@ -145,30 +148,49 @@ def _build_prompt(
     else:
         trades_str = '  なし'
 
-    stock_list = ', '.join(f"{s}({STOCK_NAMES.get(s, s)})" for s in stocks)
-
-    # 現在のショート建玉合計
+    # ショート建玉合計
     current_short_exp = sum(
         pos['shares'] * current_prices.get(sym, pos['avg_short_price'])
         for sym, pos in short_positions.items()
     )
 
+    # 総資産
+    long_val = sum(pos['shares'] * current_prices.get(sym, pos['avg_price']) for sym, pos in positions.items())
+    total_value = cash + long_val - current_short_exp
+
+    # 残り日数の表現
+    if market_days_remaining <= 0:
+        remaining_str = '本日が最終日（終了後に全ポジション強制決済）'
+    elif market_days_remaining <= 3:
+        remaining_str = f'残り約{market_days_remaining}営業日（まもなく終了。ポジションを閉じる準備を）'
+    else:
+        remaining_str = f'残り約{market_days_remaining}営業日（暦日で約{days_remaining}日）'
+
     return f"""あなたは日本株シミュレーションの自動トレーダーです。
 以下のデータを分析し、本日の注文を JSON 配列のみで返してください。
 マークダウンや説明文は不要です。JSON 配列だけを返してください。
 
-## 対象銘柄ユニバース
-{stock_list}
+## ミッション
+初期資金 ¥500,000 から始めて、シミュレーション終了時点の総資産を最大化してください。
+{remaining_str}
+
+## 重要ルール
+- シミュレーション最終日に全ポジション（ロング・ショート）が強制的に成行で決済される
+- 残り日数が少ないほど、未決済ポジションのリスクが増す（タイミングを選べない）
+- 残り日数を意識した戦略を立てること
 
 ## 現在の資産状況
 - 現金残高: ¥{cash:,.0f}
-- ロングポジション（現物買い）:
+- 総資産（参考）: ¥{total_value:,.0f}
+- ロングポジション（現物保有）:
 {long_str}
-- ショートポジション（空売り）:
+- ショートポジション（空売り中）:
 {short_str}
 - ショート建玉合計（時価）: ¥{current_short_exp:,.0f} / 上限¥{max_short_exp:,.0f}
 
-## 株価データ（直近5営業日 OHLCV）
+## 参考銘柄の株価データ（直近5営業日 OHLCV）
+以下のデータは参考として提供しています。取引対象はこれらに限らず、
+東証に上場している任意の銘柄を選んで構いません。
 {ohlcv_str}
 
 ## 直近の取引履歴（確定済み）
@@ -186,14 +208,16 @@ def _build_prompt(
 - 注文は翌営業日の寄付き（市場開始）時点でのみ約定判定される
 - BUY/COVER: 寄付価格 ≤ limit_price のとき約定（安く買いたい）
 - SELL/SHORT: 寄付価格 ≥ limit_price のとき約定（高く売りたい）
-- 条件を満たさない場合は即キャンセル（翌日再判断）
+- 条件を満たさない場合は即キャンセル（翌日に再判断）
+- 約定価格は指値ではなく実際の寄付価格
 
 ## 制約条件
-- action は BUY / SELL / SHORT / COVER のいずれか（HOLD はリストに含めない）
+- action は BUY / SELL / SHORT / COVER のいずれか（HOLDはリストに含めない）
 - 株数は 100 株単位
-- BUY: 取得後の単一銘柄ポジションが総資産の {max_long_pct*100:.0f}% を超えないこと
+- symbol は東証銘柄コード（4桁数字）
+- BUY: 1銘柄のポジションが総資産の {max_long_pct*100:.0f}% を超えないこと
 - SHORT: ショート建玉合計が ¥{max_short_exp:,.0f} を超えないこと
-- BUY/COVER に必要な現金は ¥{cash:,.0f} 以内
+- BUY/COVER に必要な現金は現金残高 ¥{cash:,.0f} 以内
 - SELL は保有ポジションの範囲内
 - COVER はショートポジションの範囲内
 - 判断がない場合は空配列 [] を返す

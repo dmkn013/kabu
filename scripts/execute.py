@@ -142,12 +142,17 @@ def check_limit(action: str, open_price: float, limit_price: float) -> bool:
 
 
 def main() -> int:
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--force', action='store_true', help='週末・休日チェックを無視して強制実行')
+    args = parser.parse_args()
+
     today = date.today()
     today_str = today.strftime('%Y-%m-%d')
-    logger.info(f'[execute] {today_str} 約定処理開始')
+    logger.info(f'[execute] {today_str} 約定処理開始' + (' [--force]' if args.force else ''))
 
-    if today.weekday() >= 5:
-        logger.info('週末のためスキップ')
+    if today.weekday() >= 5 and not args.force:
+        logger.info('週末のためスキップ（--force で強制実行可）')
         return 0
 
     config = load_config()
