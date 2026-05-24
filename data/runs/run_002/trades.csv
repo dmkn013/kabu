@@ -1,2 +1,3 @@
-date,time,symbol,action,shares,price,status,cash_after
-2026-05-24,16:05,7267,BUY,100,1401,FILLED,359900
+﻿date,time,symbol,action,shares,price,status,cash_after
+2026-05-24,08:30,5020,BUY,100,,WAIT,500000
+2026-05-24,08:30,5401,BUY,100,,WAIT,500000
