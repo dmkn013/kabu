@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Step 2 -- 16:05 実行
+Step 2 -- 9:05 実行
 全アクティブ RUN の WAIT 注文を寄付価格で約定判定し trades.csv を更新する。
 daily_summary.csv 記録、pending_orders.json 削除。
+BUY/SHORT は成り行き（始値で即約定）。SELL/COVER は指値条件を確認。
 """
 import sys, io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -69,7 +70,7 @@ def save_runs(runs: list[dict]) -> None:
 
 
 def update_trades_csv(run_dir: Path, today_str: str, results: list[dict]) -> None:
-    """WAIT 行を FILLED/UNFILLED に更新し time を 16:05 に変更する。"""
+    """WAIT 行を FILLED/UNFILLED に更新し time を 09:05 に変更する。"""
     csv_path = run_dir / 'trades.csv'
     if not csv_path.exists():
         return
@@ -86,7 +87,7 @@ def update_trades_csv(run_dir: Path, today_str: str, results: list[dict]) -> Non
             key = (row['symbol'], row['action'])
             if row.get('date') == today_str and row.get('status') == 'WAIT' and key in result_map:
                 r = result_map.pop(key)
-                row['time'] = '16:05'
+                row['time'] = '09:05'
                 row['price'] = str(int(r['price'])) if r['price'] else ''
                 row['status'] = r['status']
                 row['cash_after'] = str(int(r['cash_after']))
@@ -107,7 +108,7 @@ def append_force_close_trades(run_dir: Path, today_str: str, trades: list[dict])
         for t in trades:
             w.writerow({
                 'date': today_str,
-                'time': '16:05',
+                'time': '09:05',
                 'symbol': t['symbol'],
                 'action': t['action'],
                 'shares': t['shares'],
@@ -149,7 +150,7 @@ def main() -> int:
 
     today = date.today()
     today_str = today.strftime('%Y-%m-%d')
-    logger.info(f'[execute] {today_str} 約定処理開始' + (' [--force]' if args.force else ''))
+    logger.info(f'[execute] {today_str} 約定処理開始（9:05）' + (' [--force]' if args.force else ''))
 
     if today.weekday() >= 5 and not args.force:
         logger.info('週末のためスキップ（--force で強制実行可）')
@@ -163,21 +164,29 @@ def main() -> int:
         logger.info('アクティブな RUN がありません')
         return 0
 
-    logger.info('当日始値取得中...')
-    ohlcv = fetch_data.fetch_ohlcv(config['stocks'], lookback_days=5)
-
-    open_prices: dict[str, float] = {}
-    for sym, df in ohlcv.items():
-        if df.empty:
+    # 全 RUN の注文銘柄を集める（Claude が任意銘柄を選ぶため都度取得）
+    all_syms: set[str] = set()
+    for run in all_runs:
+        if run['status'] != 'active':
             continue
-        latest = df.index[-1]
-        latest_date = latest.date() if hasattr(latest, 'date') else date.fromisoformat(str(latest)[:10])
-        if latest_date == today:
-            open_prices[sym] = float(df.iloc[-1]['Open'])
+        pending_path = REPO_ROOT / 'data' / 'runs' / run['id'] / 'pending_orders.json'
+        if pending_path.exists():
+            pending = json.loads(pending_path.read_text(encoding='utf-8-sig'))
+            for o in pending.get('orders', []):
+                all_syms.add(o['symbol'])
+        # 保有ポジションの銘柄も追加
+        pf_path = REPO_ROOT / 'data' / 'runs' / run['id'] / 'portfolio.json'
+        if pf_path.exists():
+            pf_data = json.loads(pf_path.read_text(encoding='utf-8-sig'))
+            all_syms.update(pf_data.get('positions', {}).keys())
+            all_syms.update(pf_data.get('short_positions', {}).keys())
 
-    if not open_prices:
-        logger.warning('当日始値未取得 — 前日終値で代用')
-        open_prices = fetch_data.get_latest_close(ohlcv)
+    logger.info(f'当日始値取得中（1分足）... 対象銘柄: {sorted(all_syms)}')
+    open_prices: dict[str, float] = {}
+    if all_syms:
+        open_prices = fetch_data.fetch_opening_prices_1m(list(all_syms))
+        if not open_prices:
+            logger.warning('当日始値未取得 — 全銘柄 UNFILLED になります')
 
     runs_updated = False
 
@@ -197,7 +206,7 @@ def main() -> int:
             append_daily_summary(run_dir, today_str, summary)
             continue
 
-        pending = json.loads(pending_path.read_text(encoding='utf-8'))
+        pending = json.loads(pending_path.read_text(encoding='utf-8-sig'))
         if pending.get('date') != today_str:
             logger.warning(f"{run_id}: 保留注文日付不一致 ({pending.get('date')} != {today_str})")
             pending_path.unlink(missing_ok=True)
@@ -219,7 +228,8 @@ def main() -> int:
                 results.append({'symbol': sym, 'action': action, 'price': '', 'status': 'UNFILLED', 'cash_after': pf.cash})
                 continue
 
-            if not check_limit(action, open_price, limit_price):
+            # BUY/SHORT は成り行き。SELL/COVER のみ指値条件を確認する。
+            if action in ('SELL', 'COVER') and not check_limit(action, open_price, limit_price):
                 logger.info(f'  {action} {sym}: 指値条件不成立 (始値{open_price:.0f} / 指値{limit_price:.0f}) -> UNFILLED')
                 results.append({'symbol': sym, 'action': action, 'price': open_price, 'status': 'UNFILLED', 'cash_after': pf.cash})
                 continue

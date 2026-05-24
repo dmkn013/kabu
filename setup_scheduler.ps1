@@ -1,5 +1,5 @@
 # Windows タスクスケジューラに2つのタスクを登録する
-# decide.py (8:30) と execute.py (16:05) を毎営業日に実行
+# decide.py (8:30) と execute.py (9:05) を毎営業日に実行
 
 $uvPath  = (Get-Command uv -ErrorAction Stop).Source
 $workDir = $PSScriptRoot
@@ -64,12 +64,12 @@ Register-KabuTask `
     -Time "08:30AM" `
     -Description "日本株シミュレーション Step1: 8:30 Claude による売買判断 → WAIT 登録"
 
-# Task 2: 16:05 — 約定処理（当日始値で執行）
+# Task 2: 9:05 — 約定処理（当日始値で執行）
 Register-KabuTask `
     -TaskName "KabuSimulation_Execute" `
     -ScriptFile "execute.py" `
-    -Time "04:05PM" `
-    -Description "日本株シミュレーション Step2: 16:05 当日始値で約定処理 → FILLED/UNFILLED 更新"
+    -Time "09:05AM" `
+    -Description "日本株シミュレーション Step2: 9:05 当日始値(1分足)で約定処理 → FILLED/UNFILLED 更新"
 
 Write-Host ""
 Write-Host "登録済みタスク確認:"

@@ -8,12 +8,13 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
+  <div class="title-band">Claudeに50万もたせてみた</div>
   <header>
-    <h1>Claudeに50万持たせてみた</h1>
-    <div class="header-right">
+    <div class="header-controls">
       <select id="run-selector"></select>
-      <span id="last-updated">読み込み中...</span>
+      <span id="day-counter">--</span>
     </div>
+    <span id="last-updated">読み込み中...</span>
   </header>
 
   <main>
@@ -47,7 +48,7 @@
 
     <!-- 総資産推移 -->
     <section class="section">
-      <h2>総資産推移（時価評価）</h2>
+      <h2>総資産推移</h2>
       <p class="chart-note">現金 ＋ ロング評価 − ショート建玉</p>
       <div class="chart-container">
         <canvas id="total-chart"></canvas>
@@ -65,7 +66,7 @@
 
     <!-- ロングポジション -->
     <section class="section">
-      <h2>ロングポジション（現物）</h2>
+      <h2>ロングポジション</h2>
       <div id="long-positions-wrapper">
         <p class="empty-msg">ポジションなし</p>
       </div>
@@ -73,7 +74,7 @@
 
     <!-- ショートポジション -->
     <section class="section">
-      <h2>ショートポジション（空売り）</h2>
+      <h2>ショートポジション</h2>
       <div id="short-positions-wrapper">
         <p class="empty-msg">ポジションなし</p>
       </div>

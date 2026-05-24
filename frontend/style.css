@@ -8,21 +8,38 @@ body {
   line-height: 1.5;
 }
 
-header {
-  background: #1a1a2e;
+.title-band {
+  background: linear-gradient(135deg, #1a1a2e 0%, #2d2d5e 100%);
   color: #fff;
-  padding: 12px 24px;
+  text-align: center;
+  padding: 16px 24px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+header {
+  background: #252545;
+  color: #fff;
+  padding: 8px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-header h1 { font-size: 18px; letter-spacing: 0.05em; }
-
-.header-right {
+.header-controls {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+}
+
+#day-counter {
+  font-size: 13px;
+  color: #b0b8d0;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 #run-selector {
@@ -103,3 +120,14 @@ tr:hover td { background: #fafbff; }
 
 tr.row-wait td { background: #fffde7; }
 tr.row-wait:hover td { background: #fff9c4; }
+
+@media (max-width: 640px) {
+  .title-band { font-size: 16px; padding: 13px 16px; }
+  header { padding: 8px 12px; }
+  main { margin: 12px auto; padding: 0 10px; }
+  .summary-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px; }
+  .card { padding: 12px 14px; }
+  .card-value { font-size: 17px; }
+  .section { padding: 14px 12px; margin-bottom: 14px; }
+  .chart-container { height: 200px; }
+}

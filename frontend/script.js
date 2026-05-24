@@ -4,6 +4,7 @@ const RUNS_URL     = '../data/runs.json';
 const INITIAL_CASH = 500000;
 
 let currentRunId = null;
+let runsData = [];
 
 // ---- ユーティリティ ----
 
@@ -30,9 +31,34 @@ function parseCSV(text) {
 
 // ---- RUN セレクタ初期化 ----
 
+function countWeekdays(startStr, endStr) {
+  let count = 0;
+  const cur = new Date(startStr);
+  const end = new Date(endStr);
+  while (cur < end) {
+    const d = cur.getDay();
+    if (d !== 0 && d !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
+function getRunMeta(runId) {
+  return runsData.find(r => r.id === runId) || null;
+}
+
+function renderDayCounter(summary, runMeta) {
+  const el = document.getElementById('day-counter');
+  if (!el || !runMeta) return;
+  const elapsed = summary.length;
+  const total = countWeekdays(runMeta.start_date, runMeta.end_date);
+  el.textContent = elapsed === 0 ? `0/${total}日目（開始前）` : `${elapsed}/${total}日目`;
+}
+
 async function initRunSelector() {
   try {
     const runs = await fetch(RUNS_URL).then(r => r.json()).then(d => d.runs || []);
+    runsData = runs;
     const sel = document.getElementById('run-selector');
     sel.innerHTML = '';
     runs.forEach(run => {
@@ -69,6 +95,7 @@ async function loadRunData(runId) {
     renderShortPositions(portfolio);
     renderTradesTable(trades);
     renderChart(summary, portfolio.initial_cash || INITIAL_CASH);
+    renderDayCounter(summary, getRunMeta(runId));
     const fetchedAt = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
     document.getElementById('last-updated').textContent =
       'データ最終更新: ' + (portfolio.last_updated || '未実行') +
@@ -235,7 +262,7 @@ function renderChart(summary, initialCash) {
   const totalData = [initialCash, ...summary.map(r => parseFloat(r.total_value))];
   const cashData  = [initialCash, ...summary.map(r => parseFloat(r.cash))];
 
-  _makeChart('total-chart', labels, totalData, '総資産（時価評価）', '#e63946', 'rgba(230,57,70,0.07)');
+  _makeChart('total-chart', labels, totalData, '総資産', '#e63946', 'rgba(230,57,70,0.07)');
   _makeChart('cash-chart',  labels, cashData,  '現金残高',           '#1a6fc9', 'rgba(26,111,201,0.07)');
 }
 
@@ -283,6 +310,7 @@ async function refresh() {
   if (currentRunId) {
     try {
       const runs = await fetch(RUNS_URL).then(r => r.json()).then(d => d.runs || []);
+      runsData = runs;
       const sel = document.getElementById('run-selector');
       runs.forEach(run => {
         const opt = sel.querySelector(`option[value="${run.id}"]`);
