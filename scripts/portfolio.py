@@ -1,7 +1,3 @@
-import sys, io
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-
 import json
 import logging
 from pathlib import Path
@@ -16,7 +12,7 @@ class Portfolio:
 
     def _load(self) -> None:
         if self._path.exists():
-            with open(self._path, encoding='utf-8') as f:
+            with open(self._path, encoding='utf-8-sig') as f:
                 self._state = json.load(f)
         else:
             self._state = {

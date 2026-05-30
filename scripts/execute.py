@@ -80,10 +80,13 @@ def update_trades_csv(run_dir: Path, today_str: str, results: list[dict]) -> Non
         result_map[(r['symbol'], r['action'])] = r
 
     rows = []
-    with open(csv_path, encoding='utf-8', newline='') as f:
+    with open(csv_path, encoding='utf-8-sig', newline='') as f:
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames or []
+        # utf-8-sig が BOM を除去するが fieldnames に残る場合を保険的に正規化
+        fieldnames = [h.lstrip('﻿') for h in fieldnames]
         for row in reader:
+            row = {k.lstrip('﻿'): v for k, v in row.items()}
             key = (row['symbol'], row['action'])
             if row.get('date') == today_str and row.get('status') == 'WAIT' and key in result_map:
                 r = result_map.pop(key)

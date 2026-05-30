@@ -99,9 +99,18 @@ def calc_days_remaining(end_date_str: str, today: date) -> tuple[int, int]:
     return calendar_days, market_days
 
 
+def get_position_prices(pf: Portfolio) -> dict[str, float]:
+    """保有中の銘柄だけ価格を取得する（Claude への参照価格）。"""
+    syms = list(pf.positions.keys()) + list(pf.short_positions.keys())
+    if not syms:
+        return {}
+    ohlcv = fetch_data.fetch_ohlcv(syms, lookback_days=5)
+    return fetch_data.get_latest_close(ohlcv)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--force', action='store_true', help='週末・休日・重複チェックを無視して強制実行')
+    parser.add_argument('--force', action='store_true', help='週末・重複チェックを無視して強制実行')
     args = parser.parse_args()
 
     today = date.today()
@@ -120,14 +129,6 @@ def main() -> int:
         logger.info('アクティブな RUN がありません')
         return 0
 
-    logger.info('株価データ取得中 (共通)...')
-    ohlcv = fetch_data.fetch_ohlcv(config['stocks'], config['lookback_days'])
-    if not ohlcv:
-        logger.error('株価データ取得失敗')
-        return 1
-
-    reference_prices = fetch_data.get_latest_close(ohlcv)
-
     for run in active_runs:
         run_id = run['id']
         run_dir = REPO_ROOT / 'data' / 'runs' / run_id
@@ -144,16 +145,19 @@ def main() -> int:
         logger.info(f'{run_id}: 終了まで残り約{market_days}営業日（暦日{calendar_days}日）')
 
         pf = Portfolio(str(run_dir / 'portfolio.json'))
+
+        # 保有ポジションがある場合のみ参照価格を取得
+        reference_prices = get_position_prices(pf)
+
         recent_trades = load_recent_trades(run_dir)
 
-        logger.info(f'{run_id}: Claude に売買判断を依頼中...')
+        logger.info(f'{run_id}: Claude ({claude_agent.MODEL}) に売買判断を依頼中...')
         decisions = claude_agent.get_trading_decisions(
             cash=pf.cash,
             positions=pf.positions,
             short_positions=pf.short_positions,
-            ohlcv_data=ohlcv,
+            reference_prices=reference_prices,
             recent_trades=recent_trades,
-            current_prices=reference_prices,
             config=config,
             days_remaining=calendar_days,
             market_days_remaining=market_days,

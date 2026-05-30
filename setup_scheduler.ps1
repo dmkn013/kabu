@@ -24,57 +24,62 @@ function Register-KabuTask {
     }
 
     $scriptPath = "$workDir\scripts\$ScriptFile"
-    $action     = New-ScheduledTaskAction `
-                    -Execute $uvPath `
-                    -Argument "run python `"$scriptPath`"" `
-                    -WorkingDirectory $workDir
 
-    $trigger    = New-ScheduledTaskTrigger `
-                    -Weekly `
-                    -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday `
-                    -At $Time
+    $actionParams = @{
+        Execute          = $uvPath
+        Argument         = "run python `"$scriptPath`""
+        WorkingDirectory = $workDir
+    }
+    $action = New-ScheduledTaskAction @actionParams
 
-    $settings   = New-ScheduledTaskSettingsSet `
-                    -ExecutionTimeLimit (New-TimeSpan -Hours 1) `
-                    -RestartCount 1 `
-                    -RestartInterval (New-TimeSpan -Minutes 5) `
-                    -StartWhenAvailable $true
+    $triggerParams = @{
+        Weekly     = $true
+        DaysOfWeek = @('Monday','Tuesday','Wednesday','Thursday','Friday')
+        At         = $Time
+    }
+    $trigger = New-ScheduledTaskTrigger @triggerParams
 
-    $principal  = New-ScheduledTaskPrincipal `
-                    -UserId $env:USERNAME `
-                    -LogonType Interactive `
-                    -RunLevel Limited
+    $settingsParams = @{
+        ExecutionTimeLimit = (New-TimeSpan -Hours 1)
+        RestartCount       = 1
+        RestartInterval    = (New-TimeSpan -Minutes 5)
+        StartWhenAvailable = $true
+    }
+    $settings = New-ScheduledTaskSettingsSet @settingsParams
 
-    Register-ScheduledTask `
-        -TaskName $TaskName `
-        -Action $action `
-        -Trigger $trigger `
-        -Settings $settings `
-        -Principal $principal `
-        -Description $Description `
-        -Force | Out-Null
+    $principalParams = @{
+        UserId    = $env:USERNAME
+        LogonType = 'Interactive'
+        RunLevel  = 'Limited'
+    }
+    $principal = New-ScheduledTaskPrincipal @principalParams
+
+    $registerParams = @{
+        TaskName    = $TaskName
+        Action      = $action
+        Trigger     = $trigger
+        Settings    = $settings
+        Principal   = $principal
+        Description = $Description
+        Force       = $true
+    }
+    Register-ScheduledTask @registerParams | Out-Null
 
     Write-Host "登録完了: '$TaskName' ($Time)"
 }
 
-# Task 1: 8:30 — 売買判断（Claude による意思決定）
-Register-KabuTask `
-    -TaskName "KabuSimulation_Decide" `
-    -ScriptFile "decide.py" `
-    -Time "08:30AM" `
-    -Description "日本株シミュレーション Step1: 8:30 Claude による売買判断 → WAIT 登録"
+# Task 1: 8:30 -- 売買判断（Claude による意思決定）
+Register-KabuTask -TaskName "KabuSimulation_Decide" -ScriptFile "decide.py" -Time "08:30AM" -Description "日本株シミュレーション Step1: 8:30 Claude による売買判断 -> WAIT 登録"
 
-# Task 2: 9:05 — 約定処理（当日始値で執行）
-Register-KabuTask `
-    -TaskName "KabuSimulation_Execute" `
-    -ScriptFile "execute.py" `
-    -Time "09:05AM" `
-    -Description "日本株シミュレーション Step2: 9:05 当日始値(1分足)で約定処理 → FILLED/UNFILLED 更新"
+# Task 2: 9:05 -- 約定処理（当日始値で執行）
+Register-KabuTask -TaskName "KabuSimulation_Execute" -ScriptFile "execute.py" -Time "09:05AM" -Description "日本株シミュレーション Step2: 9:05 当日始値(1分足)で約定処理 -> FILLED/UNFILLED 更新"
 
 Write-Host ""
 Write-Host "登録済みタスク確認:"
-Get-ScheduledTask | Where-Object { $_.TaskName -like "KabuSimulation*" } |
-    Select-Object TaskName, @{N='NextRun';E={(Get-ScheduledTaskInfo -TaskName $_.TaskName).NextRunTime}}
+Get-ScheduledTask | Where-Object { $_.TaskName -like "KabuSimulation*" } | ForEach-Object {
+    $info = Get-ScheduledTaskInfo -TaskName $_.TaskName
+    [PSCustomObject]@{ TaskName = $_.TaskName; NextRun = $info.NextRunTime; State = $_.State }
+} | Format-Table -AutoSize
 
 Write-Host ""
 Write-Host "手動テスト:"
