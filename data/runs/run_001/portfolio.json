@@ -1,20 +1,7 @@
 {
-  "cash": 214020.0,
-  "positions": {
-    "8604": {
-      "shares": 100,
-      "avg_price": 1265.0
-    },
-    "8136": {
-      "shares": 100,
-      "avg_price": 851.0
-    },
-    "4755": {
-      "shares": 100,
-      "avg_price": 743.8
-    }
-  },
+  "cash": 500000,
+  "positions": {},
   "short_positions": {},
-  "last_updated": "2026-06-07",
+  "last_updated": null,
   "initial_cash": 500000
 }
