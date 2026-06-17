@@ -61,13 +61,75 @@ LOOKBACK = 20           # Stage 1 で渡す OHLCV 日数
 MIN_ROWS = 5            # この日数未満のデータしかない銘柄は除外
 
 
-def _format_group_ohlcv(group: list[str], master: dict[str, dict]) -> tuple[str, list[str]]:
-    """グループの OHLCV テキストと、データのある銘柄リストを返す。"""
+def _load_sim_context(today: date) -> dict:
+    """アクティブRunの資金・期間情報を集約して返す。"""
+    from datetime import timedelta
+
+    config_path = REPO_ROOT / 'config.json'
+    runs_json = REPO_ROOT / 'data' / 'runs.json'
+
+    ctx = {
+        'min_cash': 500_000,
+        'max_position_pct': 0.30,
+        'sim_start': today,
+        'sim_end': today,
+        'total_biz_days': 0,
+        'current_biz_day': 0,
+    }
+
+    if config_path.exists():
+        cfg = json.loads(config_path.read_text(encoding='utf-8'))
+        ctx['max_position_pct'] = cfg.get('max_long_position_pct', 0.30)
+        ctx['min_cash'] = cfg.get('initial_cash', 500_000)
+
+    if not runs_json.exists():
+        return ctx
+
+    runs = json.loads(runs_json.read_text(encoding='utf-8')).get('runs', [])
+    active = [r for r in runs if r.get('status') == 'active']
+    if not active:
+        return ctx
+
+    ctx['sim_start'] = min(date.fromisoformat(r['start_date']) for r in active)
+    ctx['sim_end'] = max(date.fromisoformat(r['end_date']) for r in active)
+
+    min_cash = float('inf')
+    for r in active:
+        pf_path = REPO_ROOT / 'data' / 'runs' / r['id'] / 'portfolio.json'
+        if pf_path.exists():
+            pf = json.loads(pf_path.read_text(encoding='utf-8'))
+            min_cash = min(min_cash, pf.get('cash', ctx['min_cash']))
+    if min_cash < float('inf'):
+        ctx['min_cash'] = min_cash
+
+    def _count_biz_days(d1: date, d2: date) -> int:
+        n, d = 0, d1
+        while d <= d2:
+            if d.weekday() < 5:
+                n += 1
+            d += timedelta(days=1)
+        return n
+
+    ctx['total_biz_days'] = _count_biz_days(ctx['sim_start'], ctx['sim_end'])
+    ctx['current_biz_day'] = _count_biz_days(ctx['sim_start'], today)
+    return ctx
+
+
+def _format_group_ohlcv(
+    group: list[str], master: dict[str, dict], max_price: int = 0
+) -> tuple[str, list[str]]:
+    """グループの OHLCV テキストと、データのある銘柄リストを返す。
+    max_price > 0 の場合、最新終値がその金額を超える銘柄を除外する。
+    """
     lines = []
     included = []
+    skipped_price = 0
     for sym in group:
         df = fetch_data.load_ohlcv_csv(sym)
         if df is None or len(df) < MIN_ROWS:
+            continue
+        if max_price > 0 and df['Close'].iloc[-1] > max_price:
+            skipped_price += 1
             continue
         info = master.get(sym, {})
         name = info.get('name', '')
@@ -80,13 +142,33 @@ def _format_group_ohlcv(group: list[str], master: dict[str, dict]) -> tuple[str,
                 f"L={int(row['Low'])} C={int(row['Close'])} V={int(row['Volume']):,}"
             )
         included.append(sym)
+    if skipped_price:
+        logger.debug(f'価格フィルター: {skipped_price} 銘柄を除外 (終値 > ¥{max_price:,})')
     return '\n'.join(lines), included
 
 
-def _build_stage1_prompt(group_idx: int, ohlcv_text: str, n: int) -> str:
+def _build_stage1_prompt(group_idx: int, ohlcv_text: str, n: int, ctx: dict) -> str:
+    min_cash = int(ctx['min_cash'])
+    max_pos = int(min_cash * ctx['max_position_pct'])
+    max_price = int(max_pos / 100)
+    sim_start = ctx['sim_start'].strftime('%Y/%m/%d')
+    sim_end = ctx['sim_end'].strftime('%Y/%m/%d')
+    total = ctx['total_biz_days']
+    current = ctx['current_biz_day']
+    remaining = max(0, total - current)
+
     return f"""あなたは日本株のスクリーニング担当アナリストです。
 これは多段階選抜（トーナメント）の Stage 1 です。プライム市場の銘柄を
 ランダムに 100 銘柄ずつのグループに分けており、これはグループ {group_idx} です。
+
+## シミュレーション概要
+- 目的: 初期資金 ¥{min_cash:,} で日本株の売買シミュレーションを行い、期間終了時の総資産を最大化する
+- 運用期間: {sim_start} ～ {sim_end}（全 {total} 営業日）
+- 本日: {current} 営業日目（残り {remaining} 営業日）
+- 現在の最低可用資金: ¥{min_cash:,}
+- 1 ポジション集中上限: {int(ctx['max_position_pct'] * 100)}%（最大 ¥{max_pos:,}）
+- **購入可能な株価の上限: ¥{max_price:,}（100株×¥{max_price:,} = ¥{max_pos:,} 以内）**
+  ※ データはすでにこの上限でフィルター済みです
 
 ## あなたのタスク
 以下の銘柄群の直近 {LOOKBACK} 営業日の値動き（OHLCV）を分析し、
@@ -98,6 +180,7 @@ def _build_stage1_prompt(group_idx: int, ohlcv_text: str, n: int) -> str:
 - 出来高の変化（急増は注目）
 - モメンタム・ボラティリティ
 - 直近の急騰・急落とその反動余地
+- 残り {remaining} 営業日のタイムホライズンに適した値動きか
 
 ## 銘柄データ（{LOOKBACK}営業日 OHLCV）
 {ohlcv_text}
@@ -179,6 +262,14 @@ def main() -> int:
         logger.error('銘柄リストが空。fetch_topix を先に実行してください')
         return 1
 
+    ctx = _load_sim_context(today)
+    max_price = int(ctx['min_cash'] * ctx['max_position_pct'] / 100)
+    logger.info(
+        f'シミュレーション: {ctx["sim_start"]} ～ {ctx["sim_end"]} '
+        f'({ctx["current_biz_day"]}/{ctx["total_biz_days"]} 営業日目) '
+        f'最低資金 ¥{int(ctx["min_cash"]):,} → 株価フィルター ¥{max_price:,} 以下'
+    )
+
     # 対象営業日シードでランダムシャッフル（同対象日への再実行で同じグループになる）
     rng = random.Random(int(target.strftime('%Y%m%d')))
     shuffled = symbols[:]
@@ -191,13 +282,13 @@ def main() -> int:
 
     all_candidates = []
     for gi, group in enumerate(groups, 1):
-        ohlcv_text, included = _format_group_ohlcv(group, master)
+        ohlcv_text, included = _format_group_ohlcv(group, master, max_price=max_price)
         if not included:
             logger.warning(f'グループ {gi}: データのある銘柄なし、スキップ')
             continue
         logger.info(f'--- グループ {gi}/{len(groups)} ({len(included)} 銘柄) ---')
 
-        prompt = _build_stage1_prompt(gi, ohlcv_text, args.survivors)
+        prompt = _build_stage1_prompt(gi, ohlcv_text, args.survivors, ctx)
         stdout = claude_agent.invoke_claude_cli(prompt, model=args.model, timeout=600)
         if stdout is None:
             logger.warning(f'グループ {gi}: Claude 呼び出し失敗、スキップ')
