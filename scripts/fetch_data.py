@@ -68,71 +68,23 @@ def get_latest_open(ohlcv: dict[str, pd.DataFrame]) -> dict[str, float]:
 
 
 def fetch_opening_prices_1m(symbols: list[str]) -> dict[str, float]:
-    """寄付価格を取得する。1m当日データが取得できない場合は日次OHLCVの直近始値にフォールバック。
-    yfinanceはTSE株の1mデータを1日遅延で配信するため、フォールバックが通常の動作になる。"""
-    from datetime import date as _date
-    today = _date.today()
-    tickers = [f"{s}.T" for s in symbols]
-
-    # 1m データ試行
-    try:
-        raw = yf.download(
-            tickers=tickers,
-            period="2d",
-            interval="1m",
-            auto_adjust=True,
-            progress=False,
-            threads=True,
-        )
-    except Exception as e:
-        logger.error(f"yfinance 1m download failed: {e}")
-        raw = None
-
-    result_1m: dict[str, float] = {}
-
-    if raw is not None and not raw.empty:
-        def _first_open_today(df: pd.DataFrame) -> float | None:
-            df = df.dropna(how="all")
-            if df.empty:
-                return None
-            idx = pd.to_datetime(df.index)
-            today_rows = df[[ts.date() == today for ts in idx]]
-            if today_rows.empty:
-                return None
-            return float(today_rows.iloc[0]["Open"])
-
-        if len(symbols) == 1:
-            sym = symbols[0]
-            val = _first_open_today(raw.copy())
-            if val is not None:
-                result_1m[sym] = val
-        else:
-            for sym, ticker in zip(symbols, tickers):
-                try:
-                    if ticker not in raw.columns.get_level_values(1):
-                        continue
-                    df = raw.xs(ticker, axis=1, level=1).copy()
-                    val = _first_open_today(df)
-                    if val is not None:
-                        result_1m[sym] = val
-                except Exception as e:
-                    logger.warning(f"{sym}: 1m 始値取得エラー ({e})")
-
-    if result_1m:
-        logger.info(f"1m当日始値取得成功: {sorted(result_1m.keys())}")
-        return result_1m
-
-    # フォールバック: 日次OHLCVの直近始値を使用
-    logger.info("1m当日データ未取得 — 日次OHLCV直近始値にフォールバック")
-    ohlcv = fetch_ohlcv(symbols, lookback_days=5)
-    fallback: dict[str, float] = {}
-    for sym, df in ohlcv.items():
-        if df.empty:
-            logger.warning(f"{sym}: 日次データも取得不可")
-            continue
-        fallback[sym] = float(df["Open"].iloc[-1])
-        logger.info(f"{sym}: フォールバック始値 {fallback[sym]:.0f} ({df.index[-1].strftime('%Y-%m-%d')})")
-    return fallback
+    """寄付価格を取得する。yf.Ticker.fast_info.open を使用。
+    市場オープン直後から遅延なしで取得可能。"""
+    result: dict[str, float] = {}
+    for sym in symbols:
+        try:
+            fi = yf.Ticker(f"{sym}.T").fast_info
+            price = fi.open
+            if price and price > 0:
+                result[sym] = float(price)
+                logger.info(f"{sym}: 始値 {price:.0f} (fast_info)")
+            else:
+                logger.warning(f"{sym}: fast_info.open が None または 0")
+        except Exception as e:
+            logger.warning(f"{sym}: fast_info 取得エラー ({e})")
+    if not result:
+        logger.error("全銘柄の始値取得失敗")
+    return result
 
 
 def format_ohlcv_for_prompt(sym: str, df: pd.DataFrame, last_n: int = 5) -> str:
