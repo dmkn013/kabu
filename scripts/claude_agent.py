@@ -1,11 +1,91 @@
 import json
 import logging
+import os
 import re
 import subprocess
+import time
 
 logger = logging.getLogger(__name__)
 
+# Stage 2（decide.py の最終売買判断）で使うモデル
 MODEL = 'claude-opus-4-7'
+
+# レート制限検知時のリトライ設定（環境変数で上書き可）
+RETRY_WAIT_SEC = int(os.environ.get('CLAUDE_RETRY_WAIT', '1800'))   # 30分
+MAX_RETRIES = int(os.environ.get('CLAUDE_MAX_RETRIES', '12'))       # 最大6時間分
+
+# Claude Code CLI がレート制限/使用上限に達したときに出力する文字列
+# （公式エラーリファレンス: https://code.claude.com/docs/en/errors）
+RATE_LIMIT_PATTERNS = (
+    "hit your session limit",
+    "hit your weekly limit",
+    "hit your opus limit",
+    "hit your sonnet limit",
+    "server is temporarily limiting requests",
+    "request rejected (429)",
+    "rate limit reached",
+    "rate limit exceeded",
+)
+
+
+def _is_rate_limited(text: str) -> bool:
+    low = text.lower()
+    return any(p in low for p in RATE_LIMIT_PATTERNS)
+
+
+def invoke_claude_cli(
+    prompt: str,
+    model: str = MODEL,
+    timeout: int = 600,
+    max_retries: int = MAX_RETRIES,
+    retry_wait: int = RETRY_WAIT_SEC,
+) -> str | None:
+    """`claude -p` を呼び出し、stdout を返す。
+
+    レート制限/使用上限を検知した場合は retry_wait 秒待機して最大 max_retries 回
+    リトライする。失敗時は None を返す。
+
+    プロンプトは stdin 経由で渡す（Windows のコマンドライン長制限 32767 文字を回避）。
+    """
+    cmd = ['claude', '-p', '--model', model, '--dangerously-skip-permissions']
+
+    for attempt in range(1, max_retries + 1):
+        logger.info(f'Claude ({model}) を呼び出し中... (試行 {attempt}/{max_retries})')
+        try:
+            result = subprocess.run(
+                cmd, input=prompt, capture_output=True, text=True,
+                timeout=timeout, encoding='utf-8',
+            )
+        except FileNotFoundError:
+            logger.error('`claude` コマンドが見つかりません')
+            return None
+        except subprocess.TimeoutExpired:
+            logger.error(f'Claude CLI タイムアウト ({timeout}秒)')
+            return None
+        except Exception as e:
+            logger.error(f'Claude CLI エラー: {e}')
+            return None
+
+        combined = (result.stdout or '') + (result.stderr or '')
+
+        if result.returncode == 0 and not _is_rate_limited(combined):
+            return result.stdout
+
+        if _is_rate_limited(combined):
+            logger.warning(
+                f'レート制限/使用上限を検知。{retry_wait}秒待機して再試行 '
+                f'(試行 {attempt}/{max_retries})'
+            )
+            if attempt < max_retries:
+                time.sleep(retry_wait)
+            continue
+
+        # レート制限以外の非ゼロ終了 — リトライしても無意味なので即終了
+        logger.error(f'Claude CLI exit {result.returncode}: {result.stderr[:500]}')
+        return None
+
+    logger.error(f'レート制限が解消されず {max_retries} 回で打ち切り')
+    return None
 
 
 def get_trading_decisions(
@@ -17,6 +97,9 @@ def get_trading_decisions(
     config: dict,
     days_remaining: int = 0,
     market_days_remaining: int = 0,
+    candidates: list[dict] | None = None,
+    ohlcv_text: str = '',
+    timeout: int = 1800,
 ) -> list[dict]:
     prompt = _build_prompt(
         cash=cash,
@@ -28,36 +111,15 @@ def get_trading_decisions(
         max_short_exp=config.get('max_short_exposure', 250000),
         days_remaining=days_remaining,
         market_days_remaining=market_days_remaining,
+        candidates=candidates,
+        ohlcv_text=ohlcv_text,
     )
 
-    logger.info(f'Claude ({MODEL}) を呼び出し中...')
-    try:
-        result = subprocess.run(
-            [
-                'claude', '-p', prompt,
-                '--model', MODEL,
-                '--dangerously-skip-permissions',
-            ],
-            capture_output=True,
-            text=True,
-            timeout=600,
-            encoding='utf-8',
-        )
-    except FileNotFoundError:
-        logger.error('`claude` コマンドが見つかりません')
-        return []
-    except subprocess.TimeoutExpired:
-        logger.error('Claude CLI タイムアウト (600秒)')
-        return []
-    except Exception as e:
-        logger.error(f'Claude CLI エラー: {e}')
+    stdout = invoke_claude_cli(prompt, model=MODEL, timeout=timeout)
+    if stdout is None:
         return []
 
-    if result.returncode != 0:
-        logger.error(f'Claude CLI exit {result.returncode}: {result.stderr[:500]}')
-        return []
-
-    decisions = _parse_decisions(result.stdout)
+    decisions = _parse_decisions(stdout)
     logger.info(f'Claude 判断: {len(decisions)} 件')
     return decisions
 
@@ -72,6 +134,8 @@ def _build_prompt(
     max_short_exp: float,
     days_remaining: int,
     market_days_remaining: int,
+    candidates: list[dict] | None = None,
+    ohlcv_text: str = '',
 ) -> str:
     # ロングポジション
     if positions:
@@ -123,6 +187,30 @@ def _build_prompt(
     else:
         remaining_str = f'残り約{market_days_remaining}営業日（暦日{days_remaining}日）'
 
+    # Stage 1 で選抜された候補銘柄（reason 付き）
+    if candidates:
+        cand_lines = []
+        for c in candidates:
+            sym = c.get('symbol', '')
+            name = c.get('name', '')
+            reason = c.get('reason', '')
+            cand_lines.append(f"  {sym} {name}: {reason}")
+        candidates_str = '\n'.join(cand_lines)
+        universe_str = (
+            f"以下は事前スクリーニング（Stage 1）で全プライム市場から選抜された "
+            f"{len(candidates)} 銘柄の候補リストです。各銘柄には選抜理由が付いています。\n"
+            f"この候補の中から本日の売買銘柄を選ぶこと（保有中ポジションの決済は候補外でも可）。\n\n"
+            f"### 候補銘柄（選抜理由付き）\n{candidates_str}"
+        )
+    else:
+        universe_str = (
+            "本日は事前スクリーニング結果（候補リスト）がありません。\n"
+            "**新規エントリー（BUY / SHORT）は行わず**、保有中ポジションの管理"
+            "（SELL / COVER / HOLD）のみ判断すること。"
+        )
+
+    ohlcv_section = f"\n\n## 候補銘柄の日次OHLCV（直近）\n{ohlcv_text}" if ohlcv_text else ''
+
     return f"""あなたは日本株シミュレーションの自動トレーダーです。
 利用可能なツール（WebSearch、WebFetch 等）を自由に使い、本日の売買判断を行ってください。
 
@@ -148,10 +236,13 @@ def _build_prompt(
 {trades_str}
 
 ## 取引対象
-東証（東京証券取引所）に上場している任意の銘柄。銘柄の選定はすべてあなたが行う。
-- ファンダメンタルズ（業績、PER、PBR、成長率など）とテクニカル（トレンド、出来高、モメンタムなど）の両面から分析すること
+{universe_str}{ohlcv_section}
+
+## 分析方針
+- 候補それぞれについて、ファンダメンタルズ（業績、PER、PBR、成長率など）とテクニカル（トレンド、出来高、モメンタムなど）の両面から分析すること
 - 今日の市況・マクロ環境・セクタートレンドも考慮すること
-- ツールを使って最新情報を調べること
+- WebSearch / WebFetch ツールを使い、有望な候補について最新のニュース・決算・株価を調べてから判断すること
+- 全候補を機械的に調べる必要はない。選抜理由とOHLCVから有望なものを優先して深掘りすること
 
 ## 注文の仕組み（寄付き指値）
 注文は翌営業日の寄付き時点でのみ約定判定される。約定価格は実際の始値。

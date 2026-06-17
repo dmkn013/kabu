@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 RUNS_JSON = REPO_ROOT / 'data' / 'runs.json'
 CONFIG_PATH = REPO_ROOT / 'config.json'
+SHORTLIST_JSON = REPO_ROOT / 'data' / 'shortlist.json'
+
+STAGE2_LOOKBACK = 60  # Stage 2 で候補銘柄に渡す OHLCV 日数
 
 
 def git_push(today_str: str, step: str) -> None:
@@ -108,6 +111,42 @@ def get_position_prices(pf: Portfolio) -> dict[str, float]:
     return fetch_data.get_latest_close(ohlcv)
 
 
+def load_shortlist(today_str: str) -> list[dict]:
+    """research.py が出力した本日の候補リストを読み込む。
+
+    存在しない/日付不一致の場合は空リストを返す（→ 既存ポジション管理のみ）。
+    """
+    if not SHORTLIST_JSON.exists():
+        logger.warning('shortlist.json が存在しません → 新規エントリーなし')
+        return []
+    data = json.loads(SHORTLIST_JSON.read_text(encoding='utf-8'))
+    if data.get('date') != today_str:
+        logger.warning(
+            f"shortlist.json の日付不一致 ({data.get('date')} != {today_str}) → 新規エントリーなし"
+        )
+        return []
+    return data.get('candidates', [])
+
+
+def build_candidate_ohlcv_text(candidates: list[dict], lookback: int = STAGE2_LOOKBACK) -> str:
+    """候補銘柄の日次 OHLCV テキストを CSV キャッシュから組み立てる。"""
+    lines = []
+    for c in candidates:
+        sym = c['symbol']
+        df = fetch_data.load_ohlcv_csv(sym)
+        if df is None or df.empty:
+            continue
+        name = c.get('name', '')
+        lines.append(f"{sym} {name}")
+        for dt, row in df.tail(lookback).iterrows():
+            dstr = dt.strftime('%Y-%m-%d') if hasattr(dt, 'strftime') else str(dt)[:10]
+            lines.append(
+                f"  {dstr} O={int(row['Open'])} H={int(row['High'])} "
+                f"L={int(row['Low'])} C={int(row['Close'])} V={int(row['Volume']):,}"
+            )
+    return '\n'.join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--force', action='store_true', help='週末・重複チェックを無視して強制実行')
@@ -128,6 +167,15 @@ def main() -> int:
     if not active_runs:
         logger.info('アクティブな RUN がありません')
         return 0
+
+    # Stage 1 の候補リスト（全 RUN 共通）を読み込む
+    candidates = load_shortlist(today_str)
+    if candidates:
+        logger.info(f'候補リスト: {len(candidates)} 銘柄（Stage 2 で深掘り）')
+        candidate_ohlcv = build_candidate_ohlcv_text(candidates)
+    else:
+        logger.info('候補リストなし → 各 RUN は既存ポジション管理のみ')
+        candidate_ohlcv = ''
 
     for run in active_runs:
         run_id = run['id']
@@ -161,6 +209,8 @@ def main() -> int:
             config=config,
             days_remaining=calendar_days,
             market_days_remaining=market_days,
+            candidates=candidates,
+            ohlcv_text=candidate_ohlcv,
         )
 
         pending_path.write_text(

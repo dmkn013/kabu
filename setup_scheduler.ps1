@@ -1,5 +1,7 @@
-# Windows タスクスケジューラに2つのタスクを登録する
-# decide.py (8:30) と execute.py (9:05) を毎営業日に実行
+# Windows タスクスケジューラにタスクを登録する
+#   update_ohlcv.py (17:00) -> 完了後 research.py を連鎖起動（Stage 1 スクリーニング）
+#   decide.py        (08:30) -> Stage 2 深掘り + 売買判断 -> WAIT 登録
+#   execute.py       (09:05) -> 当日始値で約定処理
 
 $uvPath  = (Get-Command uv -ErrorAction Stop).Source
 $workDir = $PSScriptRoot
@@ -14,7 +16,8 @@ function Register-KabuTask {
         [string]$TaskName,
         [string]$ScriptFile,
         [string]$Time,
-        [string]$Description
+        [string]$Description,
+        [int]$ExecutionTimeLimitHours = 1
     )
 
     $existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
@@ -40,7 +43,7 @@ function Register-KabuTask {
     $trigger = New-ScheduledTaskTrigger @triggerParams
 
     $settingsParams = @{
-        ExecutionTimeLimit = (New-TimeSpan -Hours 1)
+        ExecutionTimeLimit = (New-TimeSpan -Hours $ExecutionTimeLimitHours)
         RestartCount       = 1
         RestartInterval    = (New-TimeSpan -Minutes 5)
         StartWhenAvailable = $true
@@ -68,11 +71,15 @@ function Register-KabuTask {
     Write-Host "登録完了: '$TaskName' ($Time)"
 }
 
-# Task 1: 8:30 -- 売買判断（Claude による意思決定）
-Register-KabuTask -TaskName "KabuSimulation_Decide" -ScriptFile "decide.py" -Time "08:30AM" -Description "日本株シミュレーション Step1: 8:30 Claude による売買判断 -> WAIT 登録"
+# Task 1: 17:00 -- OHLCV 更新 + research.py 連鎖（Stage 1 スクリーニング）
+#   research はレート制限待機を含むため実行時間上限を長め（12時間）に設定
+Register-KabuTask -TaskName "KabuSimulation_Research" -ScriptFile "update_ohlcv.py" -Time "05:00PM" -Description "日本株シミュレーション Stage1: 17:00 OHLCV更新 -> research.py で候補銘柄スクリーニング -> shortlist.json" -ExecutionTimeLimitHours 12
 
-# Task 2: 9:05 -- 約定処理（当日始値で執行）
-Register-KabuTask -TaskName "KabuSimulation_Execute" -ScriptFile "execute.py" -Time "09:05AM" -Description "日本株シミュレーション Step2: 9:05 当日始値(1分足)で約定処理 -> FILLED/UNFILLED 更新"
+# Task 2: 8:30 -- 売買判断（Stage 2: 候補の深掘り + Claude の意思決定）
+Register-KabuTask -TaskName "KabuSimulation_Decide" -ScriptFile "decide.py" -Time "08:30AM" -Description "日本株シミュレーション Stage2: 8:30 候補銘柄を深掘りして売買判断 -> WAIT 登録" -ExecutionTimeLimitHours 2
+
+# Task 3: 9:05 -- 約定処理（当日始値で執行）
+Register-KabuTask -TaskName "KabuSimulation_Execute" -ScriptFile "execute.py" -Time "09:05AM" -Description "日本株シミュレーション Step3: 9:05 当日始値で約定処理 -> FILLED/UNFILLED 更新"
 
 Write-Host ""
 Write-Host "登録済みタスク確認:"
@@ -83,8 +90,9 @@ Get-ScheduledTask | Where-Object { $_.TaskName -like "KabuSimulation*" } | ForEa
 
 Write-Host ""
 Write-Host "手動テスト:"
+Write-Host "  Start-ScheduledTask -TaskName 'KabuSimulation_Research'"
 Write-Host "  Start-ScheduledTask -TaskName 'KabuSimulation_Decide'"
 Write-Host "  Start-ScheduledTask -TaskName 'KabuSimulation_Execute'"
 Write-Host ""
 Write-Host "タスク削除:"
-Write-Host "  'KabuSimulation_Decide','KabuSimulation_Execute' | ForEach-Object { Unregister-ScheduledTask -TaskName `$_ -Confirm:`$false }"
+Write-Host "  'KabuSimulation_Research','KabuSimulation_Decide','KabuSimulation_Execute' | ForEach-Object { Unregister-ScheduledTask -TaskName `$_ -Confirm:`$false }"
