@@ -1,0 +1,15 @@
+2026-06-19 03:00:00,952 INFO [healthcheck] 2026-06-19 開始
+
+=== Healthcheck 2026-06-19 ===
+[PASS] A. スケジューラ: Decide=0, Execute=0, Research=0, Healthcheck=267009(SCHED_S_TASK_RUNNING=実行中=正常)
+[PASS] B. gitコミット: decide=あり([decide] 2026-06-18), execute=あり([execute] 2026-06-18)
+       ※ 実行時刻 03:01 のため本日分(2026-06-19)コミットは未生成（正常、Decide=8:30/Execute=9:05予定）
+[PASS] C. データ鮮度: daily_summary=2026-06-18(run_001/run_002), portfolio=2026-06-18(run_001/run_002)
+       ※ 直近営業日の更新済み。本日分はExecute(9:05)実行後に更新される
+[PASS] D. shortlist.json: date=2026-06-19, count=73
+[PASS] E. GitHub Actions: completed/success（直近5件すべて成功）
+
+修正内容:
+- なし
+
+総合判定: OK
