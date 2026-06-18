@@ -1,4 +1,5 @@
 # Windows タスクスケジューラにタスクを登録する
+#   healthcheck.py  (03:00) -> パイプライン健全性の自律調査・修正
 #   update_ohlcv.py (17:00) -> 完了後 research.py を連鎖起動（Stage 1 スクリーニング）
 #   decide.py        (08:30) -> Stage 2 深掘り + 売買判断 -> WAIT 登録
 #   execute.py       (09:05) -> 当日始値で約定処理
@@ -71,6 +72,9 @@ function Register-KabuTask {
     Write-Host "登録完了: '$TaskName' ($Time)"
 }
 
+# Task 0: 3:00 -- ヘルスチェック（自律調査・修正）
+Register-KabuTask -TaskName "KabuSimulation_Healthcheck" -ScriptFile "healthcheck.py" -Time "03:00AM" -Description "日本株シミュレーション ヘルスチェック: 03:00 過去24時間のパイプラインを調査・修正 -> logs/healthcheck_YYYY-MM-DD.txt" -ExecutionTimeLimitHours 2
+
 # Task 1: 17:00 -- OHLCV 更新 + research.py 連鎖（Stage 1 スクリーニング）
 #   research はレート制限待機を含むため実行時間上限を長め（12時間）に設定
 Register-KabuTask -TaskName "KabuSimulation_Research" -ScriptFile "update_ohlcv.py" -Time "05:00PM" -Description "日本株シミュレーション Stage1: 17:00 OHLCV更新 -> research.py で候補銘柄スクリーニング -> shortlist.json" -ExecutionTimeLimitHours 12
@@ -90,9 +94,10 @@ Get-ScheduledTask | Where-Object { $_.TaskName -like "KabuSimulation*" } | ForEa
 
 Write-Host ""
 Write-Host "手動テスト:"
+Write-Host "  Start-ScheduledTask -TaskName 'KabuSimulation_Healthcheck'"
 Write-Host "  Start-ScheduledTask -TaskName 'KabuSimulation_Research'"
 Write-Host "  Start-ScheduledTask -TaskName 'KabuSimulation_Decide'"
 Write-Host "  Start-ScheduledTask -TaskName 'KabuSimulation_Execute'"
 Write-Host ""
 Write-Host "タスク削除:"
-Write-Host "  'KabuSimulation_Research','KabuSimulation_Decide','KabuSimulation_Execute' | ForEach-Object { Unregister-ScheduledTask -TaskName `$_ -Confirm:`$false }"
+Write-Host "  'KabuSimulation_Healthcheck','KabuSimulation_Research','KabuSimulation_Decide','KabuSimulation_Execute' | ForEach-Object { Unregister-ScheduledTask -TaskName `$_ -Confirm:`$false }"

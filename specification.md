@@ -20,26 +20,71 @@ Claude CLI を意思決定エンジンとして使い、日本株の売買をシ
 ## 2. システム構成
 
 ```
-Windows タスクスケジューラ
-    ├─ 8:30  scripts/decide.py    → 全アクティブ RUN に対して Claude が注文決定 → WAIT 登録
-    └─ 9:05  scripts/execute.py   → 全アクティブ RUN の WAIT 注文を寄付価格で約定判定
+Windows タスクスケジューラ（平日のみ）
+    ├─ 3:00  scripts/healthcheck.py → パイプライン健全性の自律調査・修正
+    ├─ 8:30  scripts/decide.py      → Stage 2: 候補銘柄を深掘りして売買判断 → WAIT 登録
+    ├─ 9:05  scripts/execute.py     → 全アクティブ RUN の WAIT 注文を寄付価格で約定判定
+    └─ 17:00 scripts/update_ohlcv.py → OHLCVキャッシュを差分更新 → research.py を連鎖起動
 
-scripts/fetch_data.py   → yfinance で東証 OHLCV 取得（全 RUN 共通・1 回だけ取得）
-scripts/portfolio.py    → ポートフォリオ状態管理
-scripts/claude_agent.py → `claude -p` サブプロセス呼び出し
-scripts/new_run.py      → 新しい RUN を作成するユーティリティ
+scripts/fetch_data.py    → yfinance で東証 OHLCV 取得・キャッシュ管理
+scripts/fetch_topix.py   → JPX公式からTOPIXプライム銘柄マスタを取得
+scripts/portfolio.py     → ポートフォリオ状態管理
+scripts/claude_agent.py  → `claude -p` サブプロセス呼び出し（レート制限自動リトライ）
+scripts/new_run.py       → 新しい RUN を作成するユーティリティ
+scripts/init_ohlcv.py    → 初回のみ: 全銘柄の過去OHLCVを一括ダウンロード
 
 data/
     runs.json                    → 全 RUN のメタデータ一覧
+    shortlist.json               → Stage 1 スクリーニング結果（翌営業日付）
+    topix_symbols.json           → プライム銘柄マスタ（1564銘柄）
+    ohlcv/{symbol}.csv           → 銘柄ごとの日次OHLCVキャッシュ（.gitignore済）
     runs/
         {run_id}/
             portfolio.json       → その RUN のポートフォリオ状態
             trades.csv           → その RUN の取引ログ
             daily_summary.csv    → その RUN の日次サマリ（チャート用）
             pending_orders.json  → 当日の WAIT 注文（execute 後に削除）
+logs/
+    healthcheck_YYYY-MM-DD.txt   → ヘルスチェックの実行ログ
 
-frontend/index.html     → ローカル HTTP サーバーで閲覧
+frontend/index.html     → GitHub Pages で公開（git push で自動デプロイ）
 ```
+
+---
+
+## 2b. 銘柄選定パイプライン（Stage 1 → Stage 2）
+
+毎営業日の売買判断は 2 段階のスクリーニングで行う。
+
+### Stage 1 — 17:00（update_ohlcv.py → research.py）
+
+1. `update_ohlcv.py` が全プライム銘柄の OHLCV を差分更新
+2. `research.py` が自動起動（連鎖）
+3. 全 1,564 銘柄をランダムに 100 銘柄ずつのグループに分割
+4. 各グループの直近 20 日 OHLCV を Claude Sonnet に渡しトーナメント形式でスクリーニング
+5. 各グループから上位 5 銘柄を選抜 → 合計約 73〜90 銘柄
+6. 結果を `data/shortlist.json`（**翌営業日付**）に保存
+
+```json
+{
+  "date": "2026-06-19",
+  "count": 73,
+  "candidates": [
+    { "symbol": "1234", "name": "銘柄名", "sector": "セクター",
+      "reason": "選抜理由", "group": 1, "rank": 1 }
+  ]
+}
+```
+
+**価格フィルター**: Stage 1 時点で「最新終値 × 100 > 1ポジション上限（cash × 30%）」の銘柄は除外済み。
+
+### Stage 2 — 8:30（decide.py）
+
+1. `shortlist.json` を読み込み（日付不一致なら新規エントリーなし・既存ポジション管理のみ）
+2. 候補銘柄の直近 60 日 OHLCV をキャッシュから読み込む
+3. Claude Opus に WebSearch 込みで各候補を深掘り分析させる
+4. 最終的な BUY / SELL / SHORT / COVER / HOLD 判断を取得
+5. → 以降は通常の decide.py フロー（pending_orders.json / trades.csv WAIT 登録）
 
 
 ---
