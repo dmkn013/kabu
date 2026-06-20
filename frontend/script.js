@@ -290,6 +290,12 @@ function renderTradesTable(trades) {
 
 // ---- チャート ----
 
+function fmtLabel(dt) {
+  if (!dt) return '';
+  // "2026-06-19 09:00" → "06/19 09:00"、"2026-06-19" → "06/19"
+  return dt.slice(5).replace('-', '/');
+}
+
 function renderChart(summary, intraday, initialCash) {
   const hasIntraday = intraday && intraday.length > 0;
   const hasSummary  = summary && summary.length > 0;
@@ -303,31 +309,42 @@ function renderChart(summary, intraday, initialCash) {
     return;
   }
 
-  let labels, totalData, cashData;
-
+  // 総資産チャート: intraday (10分おき) をメインに使い、ない日は daily_summary で補完
+  let totalLabels, totalData;
   if (hasIntraday) {
-    // intraday をメインに使い、intraday がない日は daily_summary で補完
     const intradayDates = new Set(intraday.map(r => (r.datetime || '').slice(0, 10)).filter(Boolean));
     const supplement = hasSummary
       ? summary
           .filter(r => !intradayDates.has(r.date))
-          .map(r => ({ datetime: r.date + ' 15:30', cash: r.cash, total_value: r.total_value }))
+          .map(r => ({ datetime: r.date + ' 15:30', total_value: r.total_value }))
       : [];
-
-    const allPoints = [...supplement, ...intraday]
-      .sort((a, b) => a.datetime.localeCompare(b.datetime));
-
-    labels    = ['開始前', ...allPoints.map(r => r.datetime)];
-    totalData = [initialCash, ...allPoints.map(r => parseFloat(r.total_value))];
-    cashData  = [initialCash, ...allPoints.map(r => parseFloat(r.cash))];
+    const allPoints = [...supplement, ...intraday].sort((a, b) => a.datetime.localeCompare(b.datetime));
+    totalLabels = ['開始前', ...allPoints.map(r => fmtLabel(r.datetime))];
+    totalData   = [initialCash, ...allPoints.map(r => parseFloat(r.total_value))];
   } else {
-    labels    = ['開始前', ...summary.map(r => r.date)];
-    totalData = [initialCash, ...summary.map(r => parseFloat(r.total_value))];
-    cashData  = [initialCash, ...summary.map(r => parseFloat(r.cash))];
+    totalLabels = ['開始前', ...summary.map(r => fmtLabel(r.date))];
+    totalData   = [initialCash, ...summary.map(r => parseFloat(r.total_value))];
   }
 
-  _makeChart('total-chart', labels, totalData, '総資産',   '#e63946', 'rgba(230,57,70,0.07)');
-  _makeChart('cash-chart',  labels, cashData,  '現金残高', '#1a6fc9', 'rgba(26,111,201,0.07)');
+  // 現金残高チャート: 日次 (daily_summary) — 取引日に一度しか変化しないため
+  let cashLabels, cashData;
+  if (hasSummary) {
+    cashLabels = ['開始前', ...summary.map(r => fmtLabel(r.date))];
+    cashData   = [initialCash, ...summary.map(r => parseFloat(r.cash))];
+  } else {
+    // summary がなければ intraday の日ごと最終値を使う
+    const byDate = {};
+    intraday.forEach(r => {
+      const d = (r.datetime || '').slice(0, 10);
+      if (d) byDate[d] = parseFloat(r.cash);
+    });
+    const sorted = Object.keys(byDate).sort();
+    cashLabels = ['開始前', ...sorted.map(fmtLabel)];
+    cashData   = [initialCash, ...sorted.map(d => byDate[d])];
+  }
+
+  _makeChart('total-chart', totalLabels, totalData, '総資産',   '#e63946', 'rgba(230,57,70,0.07)');
+  _makeChart('cash-chart',  cashLabels,  cashData,  '現金残高', '#1a6fc9', 'rgba(26,111,201,0.07)');
 }
 
 function _makeChart(canvasId, labels, data, label, color, bgColor) {
