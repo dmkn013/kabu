@@ -95,6 +95,23 @@ gh run list --limit 5 --repo dmkn013/kabu
   4. trades.csv の price・status・cash_after を更新
   5. portfolio.json と daily_summary.csv も整合性を合わせて更新
 
+**G. フロントエンド稼動確認（GitHub Pages の実 URL を検証）**
+
+以下の URL に curl でアクセスし、正しく応答するか確認する:
+```
+curl -s -o /dev/null -w "%{http_code}" https://dmkn013.github.io/kabu/frontend/index.html
+curl -s https://dmkn013.github.io/kabu/data/runs/run_001/portfolio.json
+curl -s https://dmkn013.github.io/kabu/data/runs/run_001/daily_summary.csv
+curl -s https://dmkn013.github.io/kabu/data/runs/run_001/trades.csv
+```
+
+確認項目:
+- `index.html` が HTTP 200 を返すか
+- `portfolio.json` が HTTP 200 かつ有効な JSON か（BOM なし、`{` で始まるか）
+- `daily_summary.csv` が HTTP 200 かつ先頭が `date,` で始まるか（BOM があれば FAIL）
+- `trades.csv` が HTTP 200 かつ先頭が `date,` で始まるか（BOM があれば FAIL）
+- BOM 検出時 → Python で該当ファイルを BOM なし UTF-8 で書き直し、git add → commit → push
+
 ### Step 3: 問題を修正する
 
 FAIL があれば原因を特定して修正する。修正の権限は無制限（コード編集・スクリプト再実行・タスクスケジューラ変更・git操作すべて許可）。
@@ -105,6 +122,7 @@ FAIL があれば原因を特定して修正する。修正の権限は無制限
 - shortlist.jsonが古い・ない → `uv run python scripts/research.py` を再実行
 - GitHub Actions失敗 → `git push` を再試行
 - UNFILLED かつ price 空の取引あり → 上記 F の手順で遡及修正
+- BOM 検出 → Python の `Path.write_text(..., encoding='utf-8')` で上書き（`encoding='utf-8-sig'` は使わない）
 
 ### Step 4: ログを書き出す
 
@@ -118,6 +136,7 @@ FAIL があれば原因を特定して修正する。修正の権限は無制限
 [PASS/FAIL] D. shortlist.json: date=<日付>, count=<件数>
 [PASS/FAIL] E. GitHub Actions: <status>
 [PASS/FAIL] F. 取引データ整合性: UNFILLED+price空=<件数>件
+[PASS/FAIL] G. フロントエンド: index.html=<HTTP status>, portfolio.json=<OK/BOM/ERROR>, CSV=<OK/BOM/ERROR>
 
 修正内容:
 - <修正した内容を箇条書き、なければ「なし」>
