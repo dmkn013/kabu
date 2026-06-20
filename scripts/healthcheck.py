@@ -36,7 +36,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 PROMPT = f"""あなたは日本株売買シミュレーションシステムの自律ヘルスチェックエージェントです。
-今日の日付は {today_str} です。作業ディレクトリは C:\\Users\\shun\\work\\kabu です。
+今日の日付は {today_str} です。作業ディレクトリは {REPO_ROOT} です。
 
 ## 目的
 過去24時間のパイプラインが specification.md の仕様通りに動作したか検査し、
