@@ -36,12 +36,9 @@ function Register-KabuTask {
     }
     $action = New-ScheduledTaskAction @actionParams
 
-    $triggerParams = @{
-        Weekly     = $true
-        DaysOfWeek = @('Monday','Tuesday','Wednesday','Thursday','Friday')
-        At         = $Time
-    }
-    $trigger = New-ScheduledTaskTrigger @triggerParams
+    # Daily トリガー（週末スキップは各スクリプト側で行う）
+    # Weekly+複数曜日指定は次回実行日の計算バグがあるため Daily を使用
+    $trigger = New-ScheduledTaskTrigger -Daily -At $Time
 
     $settingsParams = @{
         ExecutionTimeLimit = (New-TimeSpan -Hours $ExecutionTimeLimitHours)

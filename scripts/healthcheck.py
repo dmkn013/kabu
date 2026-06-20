@@ -129,6 +129,9 @@ git push
 
 
 def main() -> int:
+    if date.today().weekday() >= 5:
+        logger.info('週末のためスキップ')
+        return 0
     logger.info(f'[healthcheck] {today_str} 開始')
 
     # PATH に Claude CLI のディレクトリを追加

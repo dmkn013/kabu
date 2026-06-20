@@ -56,6 +56,9 @@ def main() -> int:
     args = parser.parse_args()
 
     today = date.today()
+    if today.weekday() >= 5:
+        logger.info('週末のためスキップ')
+        return 0
     logger.info(f'[update_ohlcv] {today} OHLCV 更新開始')
 
     symbols = fetch_topix.get_prime_symbols(refresh=True)
