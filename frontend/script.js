@@ -64,13 +64,12 @@ function getRunMeta(runId) {
   return runsData.find(r => r.id === runId) || null;
 }
 
-function renderDayCounter(intraday, summary, runMeta) {
+function renderDayCounter(trades, runMeta) {
   const el = document.getElementById('day-counter');
   if (!el || !runMeta) return;
-  const dates = intraday.length
-    ? [...new Set(intraday.map(r => (r.datetime || '').slice(0, 10)).filter(Boolean))]
-    : summary.map(r => r.date);
-  const elapsed = dates.length;
+  // FILLED 取引があった日を「取引日」としてカウント（日数 = 最初の取引から今日まで）
+  const tradeDates = new Set(trades.filter(t => t.status === 'FILLED').map(t => t.date));
+  const elapsed = tradeDates.size;
   const total = countWeekdays(runMeta.start_date, runMeta.end_date);
   el.textContent = elapsed === 0 ? `0/${total}日目（開始前）` : `${elapsed}/${total}日目`;
 }
@@ -126,7 +125,7 @@ async function loadRunData(runId) {
     renderShortPositions(portfolio);
     renderTradesTable(trades);
     renderChart(summary, intraday, portfolio.initial_cash || INITIAL_CASH);
-    renderDayCounter(intraday, summary, getRunMeta(runId));
+    renderDayCounter(trades, getRunMeta(runId));
 
     const fetchedAt = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
     const priceAt   = mp.updated_at ? `　現在値: ${mp.updated_at}` : '';
