@@ -85,6 +85,16 @@ gh run list --limit 5 --repo dmkn013/kabu
 ```
 - 直近の run が `completed / success` か
 
+**F. 取引データの整合性チェック**
+- `data/runs/*/trades.csv` の全行を読み、`status=UNFILLED かつ price が空` の行がないか確認
+- 空の場合 → `data/ohlcv/{{symbol}}.csv` から当該日付の Open 価格を取得し遡及修正する
+- 修正手順:
+  1. Python で trades.csv を読み込む
+  2. 対象行の symbol・date で `fetch_data.load_ohlcv_csv(symbol)` から Open を取得
+  3. `portfolio.py` の `Portfolio` を当日開始時点の状態に戻して `buy()/short()/sell()/cover()` を再実行
+  4. trades.csv の price・status・cash_after を更新
+  5. portfolio.json と daily_summary.csv も整合性を合わせて更新
+
 ### Step 3: 問題を修正する
 
 FAIL があれば原因を特定して修正する。修正の権限は無制限（コード編集・スクリプト再実行・タスクスケジューラ変更・git操作すべて許可）。
@@ -94,6 +104,7 @@ FAIL があれば原因を特定して修正する。修正の権限は無制限
 - gitコミットがない → スクリプトを手動で再実行（`uv run python scripts/xxx.py --force`）
 - shortlist.jsonが古い・ない → `uv run python scripts/research.py` を再実行
 - GitHub Actions失敗 → `git push` を再試行
+- UNFILLED かつ price 空の取引あり → 上記 F の手順で遡及修正
 
 ### Step 4: ログを書き出す
 
@@ -106,6 +117,7 @@ FAIL があれば原因を特定して修正する。修正の権限は無制限
 [PASS/FAIL] C. データ鮮度: daily_summary=<日付>, portfolio=<日付>
 [PASS/FAIL] D. shortlist.json: date=<日付>, count=<件数>
 [PASS/FAIL] E. GitHub Actions: <status>
+[PASS/FAIL] F. 取引データ整合性: UNFILLED+price空=<件数>件
 
 修正内容:
 - <修正した内容を箇条書き、なければ「なし」>
