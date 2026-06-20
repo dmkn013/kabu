@@ -1,21 +1,21 @@
-{
+﻿{
   "runs": [
     {
       "id": "run_001",
       "name": "Run 1",
       "status": "active",
-      "created_at": "2026-06-16",
-      "start_date": "2026-06-16",
-      "end_date": "2026-08-10",
+      "created_at": "2026-06-23",
+      "start_date": "2026-06-23",
+      "end_date": "2026-08-21",
       "initial_cash": 500000
     },
     {
       "id": "run_002",
       "name": "Run 2",
       "status": "active",
-      "created_at": "2026-06-16",
-      "start_date": "2026-06-16",
-      "end_date": "2026-08-10",
+      "created_at": "2026-06-23",
+      "start_date": "2026-06-23",
+      "end_date": "2026-08-21",
       "initial_cash": 500000
     }
   ]

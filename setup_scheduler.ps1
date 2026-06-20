@@ -69,8 +69,14 @@ function Register-KabuTask {
     Write-Host "登録完了: '$TaskName' ($Time)"
 }
 
-# Task 0: 3:00 -- ヘルスチェック（自律調査・修正）
-Register-KabuTask -TaskName "KabuSimulation_Healthcheck" -ScriptFile "healthcheck.py" -Time "03:00AM" -Description "日本株シミュレーション ヘルスチェック: 03:00 過去24時間のパイプラインを調査・修正 -> logs/healthcheck_YYYY-MM-DD.txt" -ExecutionTimeLimitHours 2
+# Task 0: 11:00 -- ヘルスチェック（自律調査・修正）
+Register-KabuTask -TaskName "KabuSimulation_Healthcheck" -ScriptFile "healthcheck.py" -Time "11:00AM" -Description "日本株シミュレーション ヘルスチェック: 11:00 前日分パイプラインを調査・修正 -> logs/healthcheck_YYYY-MM-DD.txt" -ExecutionTimeLimitHours 2
+
+# Task 0b: 11:35 -- 前場終了スナップショット
+Register-KabuTask -TaskName "KabuSimulation_Snapshot_AM" -ScriptFile "snapshot.py" -Time "11:35AM" -Description "日本株シミュレーション スナップショット: 11:35 前場終了後の現在値を取得 -> intraday.csv"
+
+# Task 0c: 15:35 -- 後場終了スナップショット
+Register-KabuTask -TaskName "KabuSimulation_Snapshot_PM" -ScriptFile "snapshot.py" -Time "03:35PM" -Description "日本株シミュレーション スナップショット: 15:35 後場終了後の現在値を取得 -> intraday.csv"
 
 # Task 1: 17:00 -- OHLCV 更新 + research.py 連鎖（Stage 1 スクリーニング）
 #   research はレート制限待機を含むため実行時間上限を長め（12時間）に設定
@@ -93,9 +99,11 @@ Get-ScheduledTask | Where-Object { $_.TaskName -like "KabuSimulation*" } | ForEa
 Write-Host ""
 Write-Host "手動テスト:"
 Write-Host "  Start-ScheduledTask -TaskName 'KabuSimulation_Healthcheck'"
+Write-Host "  Start-ScheduledTask -TaskName 'KabuSimulation_Snapshot_AM'"
+Write-Host "  Start-ScheduledTask -TaskName 'KabuSimulation_Snapshot_PM'"
 Write-Host "  Start-ScheduledTask -TaskName 'KabuSimulation_Research'"
 Write-Host "  Start-ScheduledTask -TaskName 'KabuSimulation_Decide'"
 Write-Host "  Start-ScheduledTask -TaskName 'KabuSimulation_Execute'"
 Write-Host ""
 Write-Host "タスク削除:"
-Write-Host "  'KabuSimulation_Healthcheck','KabuSimulation_Research','KabuSimulation_Decide','KabuSimulation_Execute' | ForEach-Object { Unregister-ScheduledTask -TaskName `$_ -Confirm:`$false }"
+Write-Host "  'KabuSimulation_Healthcheck','KabuSimulation_Snapshot_AM','KabuSimulation_Snapshot_PM','KabuSimulation_Research','KabuSimulation_Decide','KabuSimulation_Execute' | ForEach-Object { Unregister-ScheduledTask -TaskName `$_ -Confirm:`$false }"

@@ -1,15 +1,32 @@
 'use strict';
 
 const RUNS_URL     = '../data/runs.json';
+const NAMES_URL    = '../data/topix_symbols.json';
+const PRICES_URL   = '../data/market_prices.json';
 const INITIAL_CASH = 500000;
 
-let currentRunId = null;
-let runsData = [];
+let currentRunId  = null;
+let runsData      = [];
+let symMap        = {};   // code -> name
+let marketPrices  = {};   // code -> current price
 
 // ---- ユーティリティ ----
 
 function fmt(n) {
   return '¥' + Math.round(n).toLocaleString('ja-JP');
+}
+
+function fmtPnl(n) {
+  const sign = n >= 0 ? '+' : '';
+  return sign + fmt(n);
+}
+
+function pnlClass(n) {
+  return n > 0 ? 'positive' : n < 0 ? 'negative' : 'neutral';
+}
+
+function symName(code) {
+  return symMap[code] ? `<span class="sym-name">${symMap[code]}</span>` : '';
 }
 
 function parseCSV(text) {
@@ -47,15 +64,24 @@ function getRunMeta(runId) {
   return runsData.find(r => r.id === runId) || null;
 }
 
-function renderDayCounter(summary, runMeta) {
+function renderDayCounter(intraday, summary, runMeta) {
   const el = document.getElementById('day-counter');
   if (!el || !runMeta) return;
-  const elapsed = summary.length;
+  const dates = intraday.length
+    ? [...new Set(intraday.map(r => r.datetime.slice(0, 10)))]
+    : summary.map(r => r.date);
+  const elapsed = dates.length;
   const total = countWeekdays(runMeta.start_date, runMeta.end_date);
   el.textContent = elapsed === 0 ? `0/${total}日目（開始前）` : `${elapsed}/${total}日目`;
 }
 
 async function initRunSelector() {
+  // 銘柄名マスタを一度だけロード
+  try {
+    const data = await fetch(NAMES_URL).then(r => r.json());
+    symMap = Object.fromEntries((data.symbols || []).map(s => [s.code, s.name]));
+  } catch (_) {}
+
   try {
     const runs = await fetch(RUNS_URL).then(r => r.json()).then(d => d.runs || []);
     runsData = runs;
@@ -85,21 +111,28 @@ async function initRunSelector() {
 async function loadRunData(runId) {
   const base = `../data/runs/${runId}`;
   try {
-    const [portfolio, trades, summary] = await Promise.all([
+    const [portfolio, trades, summary, intraday, mp] = await Promise.all([
       fetch(`${base}/portfolio.json`).then(r => { if (!r.ok) throw new Error('portfolio.json not found'); return r.json(); }),
       fetch(`${base}/trades.csv`).then(r => r.text()).then(parseCSV),
       fetch(`${base}/daily_summary.csv`).then(r => r.text()).then(parseCSV).catch(() => []),
+      fetch(`${base}/intraday.csv`).then(r => r.text()).then(parseCSV).catch(() => []),
+      fetch(PRICES_URL).then(r => r.json()).catch(() => ({ prices: {} })),
     ]);
+
+    marketPrices = mp.prices || {};
+
     renderSummary(portfolio);
     renderLongPositions(portfolio);
     renderShortPositions(portfolio);
     renderTradesTable(trades);
-    renderChart(summary, portfolio.initial_cash || INITIAL_CASH);
-    renderDayCounter(summary, getRunMeta(runId));
+    renderChart(summary, intraday, portfolio.initial_cash || INITIAL_CASH);
+    renderDayCounter(intraday, summary, getRunMeta(runId));
+
     const fetchedAt = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    const priceAt   = mp.updated_at ? `　現在値: ${mp.updated_at}` : '';
     document.getElementById('last-updated').textContent =
       'データ最終更新: ' + (portfolio.last_updated || '未実行') +
-      '　取得: ' + fetchedAt;
+      priceAt + '　取得: ' + fetchedAt;
   } catch (e) {
     document.getElementById('last-updated').textContent = 'データ読み込みエラー: ' + e.message;
     console.error(e);
@@ -114,27 +147,28 @@ function renderSummary(portfolio) {
   const positions   = portfolio.positions || {};
   const shortPos    = portfolio.short_positions || {};
 
-  const longValue    = Object.values(positions).reduce((s, p) => s + p.shares * p.avg_price, 0);
-  const shortExp     = Object.values(shortPos).reduce((s, p) => s + p.shares * p.avg_short_price, 0);
-  const total        = cash + longValue - shortExp;
-  const pnl          = total - initialCash;
-  const pct          = initialCash > 0 ? (pnl / initialCash * 100) : 0;
+  const longValue = Object.entries(positions).reduce((s, [sym, p]) => {
+    return s + p.shares * (marketPrices[sym] || p.avg_price);
+  }, 0);
+  const shortExp = Object.entries(shortPos).reduce((s, [sym, p]) => {
+    return s + p.shares * (marketPrices[sym] || p.avg_short_price);
+  }, 0);
+  const total = cash + longValue - shortExp;
+  const pnl   = total - initialCash;
+  const pct   = initialCash > 0 ? (pnl / initialCash * 100) : 0;
 
   setText('cash',           fmt(cash));
   setText('long-value',     fmt(longValue));
   setText('short-exposure', fmt(shortExp));
   setText('total-value',    fmt(total));
 
-  const cls  = pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : 'neutral';
-  const sign = pnl >= 0 ? '+' : '';
-
   const pnlEl = document.getElementById('pnl');
-  pnlEl.textContent = sign + fmt(pnl);
-  pnlEl.className   = 'card-value ' + cls;
+  pnlEl.textContent = fmtPnl(pnl);
+  pnlEl.className   = 'card-value ' + pnlClass(pnl);
 
   const pctEl = document.getElementById('pnl-pct');
-  pctEl.textContent = sign + pct.toFixed(2) + '%';
-  pctEl.className   = 'card-value ' + cls;
+  pctEl.textContent = (pnl >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+  pctEl.className   = 'card-value ' + pnlClass(pnl);
 }
 
 function setText(id, val) {
@@ -155,15 +189,18 @@ function renderLongPositions(portfolio) {
   }
 
   const rows = keys.map(sym => {
-    const p     = positions[sym];
-    const value = p.shares * p.avg_price;
+    const p        = positions[sym];
+    const curPrice = marketPrices[sym] || p.avg_price;
+    const value    = p.shares * curPrice;
+    const pnl      = (curPrice - p.avg_price) * p.shares;
+    const hasCur   = !!marketPrices[sym];
     return `<tr>
-      <td>${sym}</td>
+      <td><span class="sym-code">${sym}</span>${symName(sym)}</td>
       <td>${p.shares.toLocaleString()}株</td>
       <td>${fmt(p.avg_price)}</td>
-      <td>${fmt(p.avg_price)}</td>
+      <td>${hasCur ? fmt(curPrice) : '<span class="muted">—</span>'}</td>
       <td>${fmt(value)}</td>
-      <td class="neutral">±¥0</td>
+      <td class="${pnlClass(pnl)}">${hasCur ? fmtPnl(pnl) : '<span class="muted">—</span>'}</td>
     </tr>`;
   }).join('');
 
@@ -172,7 +209,7 @@ function renderLongPositions(portfolio) {
       <table>
         <thead><tr>
           <th>銘柄</th><th>株数</th><th>取得単価</th>
-          <th>参考単価</th><th>評価額</th><th>評価損益</th>
+          <th>現在値</th><th>評価額</th><th>評価損益</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -192,15 +229,18 @@ function renderShortPositions(portfolio) {
   }
 
   const rows = keys.map(sym => {
-    const p   = shortPos[sym];
-    const exp = p.shares * p.avg_short_price;
+    const p        = shortPos[sym];
+    const curPrice = marketPrices[sym] || p.avg_short_price;
+    const exp      = p.shares * p.avg_short_price;
+    const pnl      = (p.avg_short_price - curPrice) * p.shares;
+    const hasCur   = !!marketPrices[sym];
     return `<tr>
-      <td>${sym}</td>
+      <td><span class="sym-code">${sym}</span>${symName(sym)}</td>
       <td>${p.shares.toLocaleString()}株</td>
       <td>${fmt(p.avg_short_price)}</td>
-      <td>${fmt(p.avg_short_price)}</td>
+      <td>${hasCur ? fmt(curPrice) : '<span class="muted">—</span>'}</td>
       <td>${fmt(exp)}</td>
-      <td class="neutral">±¥0</td>
+      <td class="${pnlClass(pnl)}">${hasCur ? fmtPnl(pnl) : '<span class="muted">—</span>'}</td>
     </tr>`;
   }).join('');
 
@@ -209,7 +249,7 @@ function renderShortPositions(portfolio) {
       <table>
         <thead><tr>
           <th>銘柄</th><th>株数</th><th>建値</th>
-          <th>参考単価</th><th>建玉額</th><th>含み損益</th>
+          <th>現在値</th><th>建玉額</th><th>含み損益</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -236,7 +276,7 @@ function renderTradesTable(trades) {
     const rowClass = status === 'WAIT' ? ' class="row-wait"' : '';
     return `<tr${rowClass}>
       <td>${t.date}</td>
-      <td>${t.symbol}</td>
+      <td><span class="sym-code">${t.symbol}</span>${symName(t.symbol)}</td>
       <td>${actionBadge}</td>
       <td>${parseInt(t.shares || 0).toLocaleString()}株</td>
       <td>${priceStr}</td>
@@ -250,24 +290,49 @@ function renderTradesTable(trades) {
 
 // ---- チャート ----
 
-function renderChart(summary, initialCash) {
-  if (!summary.length) {
+function renderChart(summary, intraday, initialCash) {
+  const hasIntraday = intraday && intraday.length > 0;
+  const hasSummary  = summary && summary.length > 0;
+
+  if (!hasIntraday && !hasSummary) {
     const empty = '<p class="empty-msg">チャートデータなし（取引後に表示されます）</p>';
-    document.getElementById('total-chart').parentElement.innerHTML = empty;
-    document.getElementById('cash-chart').parentElement.innerHTML  = empty;
+    const tc = document.getElementById('total-chart');
+    const cc = document.getElementById('cash-chart');
+    if (tc) tc.parentElement.innerHTML = empty;
+    if (cc) cc.parentElement.innerHTML = empty;
     return;
   }
 
-  const labels    = ['開始前', ...summary.map(r => r.date)];
-  const totalData = [initialCash, ...summary.map(r => parseFloat(r.total_value))];
-  const cashData  = [initialCash, ...summary.map(r => parseFloat(r.cash))];
+  let labels, totalData, cashData;
 
-  _makeChart('total-chart', labels, totalData, '総資産', '#e63946', 'rgba(230,57,70,0.07)');
-  _makeChart('cash-chart',  labels, cashData,  '現金残高',           '#1a6fc9', 'rgba(26,111,201,0.07)');
+  if (hasIntraday) {
+    // intraday をメインに使い、intraday がない日は daily_summary で補完
+    const intradayDates = new Set(intraday.map(r => r.datetime.slice(0, 10)));
+    const supplement = hasSummary
+      ? summary
+          .filter(r => !intradayDates.has(r.date))
+          .map(r => ({ datetime: r.date + ' 15:30', cash: r.cash, total_value: r.total_value }))
+      : [];
+
+    const allPoints = [...supplement, ...intraday]
+      .sort((a, b) => a.datetime.localeCompare(b.datetime));
+
+    labels    = ['開始前', ...allPoints.map(r => r.datetime)];
+    totalData = [initialCash, ...allPoints.map(r => parseFloat(r.total_value))];
+    cashData  = [initialCash, ...allPoints.map(r => parseFloat(r.cash))];
+  } else {
+    labels    = ['開始前', ...summary.map(r => r.date)];
+    totalData = [initialCash, ...summary.map(r => parseFloat(r.total_value))];
+    cashData  = [initialCash, ...summary.map(r => parseFloat(r.cash))];
+  }
+
+  _makeChart('total-chart', labels, totalData, '総資産',   '#e63946', 'rgba(230,57,70,0.07)');
+  _makeChart('cash-chart',  labels, cashData,  '現金残高', '#1a6fc9', 'rgba(26,111,201,0.07)');
 }
 
 function _makeChart(canvasId, labels, data, label, color, bgColor) {
   const canvas   = document.getElementById(canvasId);
+  if (!canvas) return;
   const existing = Chart.getChart(canvas);
   if (existing) existing.destroy();
   new Chart(canvas.getContext('2d'), {
@@ -280,8 +345,8 @@ function _makeChart(canvasId, labels, data, label, color, bgColor) {
         borderColor: color,
         backgroundColor: bgColor,
         borderWidth: 2,
-        pointRadius: 4,
-        pointHoverRadius: 6,
+        pointRadius: 3,
+        pointHoverRadius: 5,
         fill: true,
         tension: 0,
       }],
@@ -298,6 +363,7 @@ function _makeChart(canvasId, labels, data, label, color, bgColor) {
         },
       },
       scales: {
+        x: { ticks: { maxTicksLimit: 12, maxRotation: 30 } },
         y: { ticks: { callback: v => '¥' + Math.round(v / 1000) + 'k' } },
       },
     },
@@ -320,6 +386,15 @@ async function refresh() {
     await loadRunData(currentRunId);
   }
 }
+
+// 銘柄コード・名称のインラインスタイル
+const _style = document.createElement('style');
+_style.textContent = `
+  .sym-code { font-weight: 600; }
+  .sym-name { display: block; font-size: 0.75em; color: #888; margin-top: 1px; }
+  .muted { color: #aaa; }
+`;
+document.head.appendChild(_style);
 
 initRunSelector();
 setInterval(refresh, 60 * 1000);
