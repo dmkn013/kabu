@@ -113,10 +113,10 @@ async function loadRunData(runId) {
   try {
     const [portfolio, trades, summary, intraday, mp] = await Promise.all([
       fetch(`${base}/portfolio.json`).then(r => { if (!r.ok) throw new Error('portfolio.json not found'); return r.json(); }),
-      fetch(`${base}/trades.csv`).then(r => r.text()).then(parseCSV),
-      fetch(`${base}/daily_summary.csv`).then(r => r.text()).then(parseCSV).catch(() => []),
-      fetch(`${base}/intraday.csv`).then(r => r.text()).then(parseCSV).catch(() => []),
-      fetch(PRICES_URL).then(r => r.json()).catch(() => ({ prices: {} })),
+      fetch(`${base}/trades.csv`).then(r => r.ok ? r.text() : '').then(parseCSV).catch(() => []),
+      fetch(`${base}/daily_summary.csv`).then(r => r.ok ? r.text() : '').then(parseCSV).catch(() => []),
+      fetch(`${base}/intraday.csv`).then(r => r.ok ? r.text() : '').then(parseCSV).catch(() => []),
+      fetch(PRICES_URL).then(r => r.ok ? r.json() : { prices: {} }).catch(() => ({ prices: {} })),
     ]);
 
     marketPrices = mp.prices || {};
