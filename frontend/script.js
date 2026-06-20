@@ -67,8 +67,11 @@ function getRunMeta(runId) {
 function renderDayCounter(trades, runMeta) {
   const el = document.getElementById('day-counter');
   if (!el || !runMeta) return;
-  // FILLED 取引があった日を「取引日」としてカウント（日数 = 最初の取引から今日まで）
-  const tradeDates = new Set(trades.filter(t => t.status === 'FILLED').map(t => t.date));
+  // start_date 以降の FILLED 取引がある日をカウント
+  const start = runMeta.start_date || '0000-00-00';
+  const tradeDates = new Set(
+    trades.filter(t => t.status === 'FILLED' && t.date >= start).map(t => t.date)
+  );
   const elapsed = tradeDates.size;
   const total = countWeekdays(runMeta.start_date, runMeta.end_date);
   el.textContent = elapsed === 0 ? `0/${total}日目（開始前）` : `${elapsed}/${total}日目`;
@@ -192,14 +195,13 @@ function renderLongPositions(portfolio) {
     const curPrice = marketPrices[sym] || p.avg_price;
     const value    = p.shares * curPrice;
     const pnl      = (curPrice - p.avg_price) * p.shares;
-    const hasCur   = !!marketPrices[sym];
     return `<tr>
       <td><span class="sym-code">${sym}</span>${symName(sym)}</td>
       <td>${p.shares.toLocaleString()}株</td>
       <td>${fmt(p.avg_price)}</td>
-      <td>${hasCur ? fmt(curPrice) : '<span class="muted">—</span>'}</td>
+      <td>${fmt(curPrice)}</td>
       <td>${fmt(value)}</td>
-      <td class="${pnlClass(pnl)}">${hasCur ? fmtPnl(pnl) : '<span class="muted">—</span>'}</td>
+      <td class="${pnlClass(pnl)}">${fmtPnl(pnl)}</td>
     </tr>`;
   }).join('');
 
@@ -232,14 +234,13 @@ function renderShortPositions(portfolio) {
     const curPrice = marketPrices[sym] || p.avg_short_price;
     const exp      = p.shares * p.avg_short_price;
     const pnl      = (p.avg_short_price - curPrice) * p.shares;
-    const hasCur   = !!marketPrices[sym];
     return `<tr>
       <td><span class="sym-code">${sym}</span>${symName(sym)}</td>
       <td>${p.shares.toLocaleString()}株</td>
       <td>${fmt(p.avg_short_price)}</td>
-      <td>${hasCur ? fmt(curPrice) : '<span class="muted">—</span>'}</td>
+      <td>${fmt(curPrice)}</td>
       <td>${fmt(exp)}</td>
-      <td class="${pnlClass(pnl)}">${hasCur ? fmtPnl(pnl) : '<span class="muted">—</span>'}</td>
+      <td class="${pnlClass(pnl)}">${fmtPnl(pnl)}</td>
     </tr>`;
   }).join('');
 

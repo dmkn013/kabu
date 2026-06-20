@@ -5,8 +5,8 @@
       "name": "Run 1",
       "status": "active",
       "created_at": "2026-06-16",
-      "start_date": "2026-06-16",
-      "end_date": "2026-08-10",
+      "start_date": "2026-06-19",
+      "end_date": "2026-08-14",
       "initial_cash": 500000
     },
     {
@@ -14,8 +14,8 @@
       "name": "Run 2",
       "status": "active",
       "created_at": "2026-06-16",
-      "start_date": "2026-06-16",
-      "end_date": "2026-08-10",
+      "start_date": "2026-06-19",
+      "end_date": "2026-08-14",
       "initial_cash": 500000
     }
   ]
