@@ -68,7 +68,7 @@ function renderDayCounter(intraday, summary, runMeta) {
   const el = document.getElementById('day-counter');
   if (!el || !runMeta) return;
   const dates = intraday.length
-    ? [...new Set(intraday.map(r => r.datetime.slice(0, 10)))]
+    ? [...new Set(intraday.map(r => (r.datetime || '').slice(0, 10)).filter(Boolean))]
     : summary.map(r => r.date);
   const elapsed = dates.length;
   const total = countWeekdays(runMeta.start_date, runMeta.end_date);
@@ -307,7 +307,7 @@ function renderChart(summary, intraday, initialCash) {
 
   if (hasIntraday) {
     // intraday をメインに使い、intraday がない日は daily_summary で補完
-    const intradayDates = new Set(intraday.map(r => r.datetime.slice(0, 10)));
+    const intradayDates = new Set(intraday.map(r => (r.datetime || '').slice(0, 10)).filter(Boolean));
     const supplement = hasSummary
       ? summary
           .filter(r => !intradayDates.has(r.date))
