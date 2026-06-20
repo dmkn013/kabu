@@ -174,21 +174,39 @@ def get_latest_open(ohlcv: dict[str, pd.DataFrame]) -> dict[str, float]:
     return {sym: float(df['Open'].iloc[-1]) for sym, df in ohlcv.items() if not df.empty}
 
 
-def fetch_opening_prices_1m(symbols: list[str]) -> dict[str, float]:
+def fetch_opening_prices_1m(symbols: list[str], max_retries: int = 3, retry_wait: int = 60) -> dict[str, float]:
     """寄付価格を取得する。yf.Ticker.fast_info.open を使用。
-    市場オープン直後から遅延なしで取得可能。"""
+    市場オープン直後はキャッシュが追いつかないことがあるため、
+    取得できなかった銘柄は retry_wait 秒待ってリトライする。"""
+    import time
     result: dict[str, float] = {}
-    for sym in symbols:
-        try:
-            fi = yf.Ticker(f"{sym}.T").fast_info
-            price = fi.open
-            if price and price > 0:
-                result[sym] = float(price)
-                logger.info(f"{sym}: 始値 {price:.0f} (fast_info)")
-            else:
-                logger.warning(f"{sym}: fast_info.open が None または 0")
-        except Exception as e:
-            logger.warning(f"{sym}: fast_info 取得エラー ({e})")
+    remaining = list(symbols)
+
+    for attempt in range(1, max_retries + 1):
+        still_missing = []
+        for sym in remaining:
+            try:
+                fi = yf.Ticker(f"{sym}.T").fast_info
+                price = fi.open
+                if price and price > 0:
+                    result[sym] = float(price)
+                    logger.info(f"{sym}: 始値 {price:.0f} (fast_info, attempt={attempt})")
+                else:
+                    logger.warning(f"{sym}: fast_info.open が None/0 (attempt={attempt})")
+                    still_missing.append(sym)
+            except Exception as e:
+                logger.warning(f"{sym}: fast_info 取得エラー ({e}) (attempt={attempt})")
+                still_missing.append(sym)
+
+        remaining = still_missing
+        if not remaining:
+            break
+        if attempt < max_retries:
+            logger.info(f"{len(remaining)} 銘柄が未取得。{retry_wait}秒後にリトライ ({attempt}/{max_retries})...")
+            time.sleep(retry_wait)
+
+    if remaining:
+        logger.error(f"始値取得失敗: {remaining}")
     if not result:
         logger.error("全銘柄の始値取得失敗")
     return result

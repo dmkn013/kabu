@@ -79,8 +79,9 @@ Register-KabuTask -TaskName "KabuSimulation_Research" -ScriptFile "update_ohlcv.
 # Task 2: 8:30 -- 売買判断（Stage 2: 候補の深掘り + Claude の意思決定）
 Register-KabuTask -TaskName "KabuSimulation_Decide" -ScriptFile "decide.py" -Time "08:30AM" -Description "日本株シミュレーション Stage2: 8:30 候補銘柄を深掘りして売買判断 -> WAIT 登録" -ExecutionTimeLimitHours 2
 
-# Task 3: 9:05 -- 約定処理（当日始値で執行）
-Register-KabuTask -TaskName "KabuSimulation_Execute" -ScriptFile "execute.py" -Time "09:05AM" -Description "日本株シミュレーション Step3: 9:05 当日始値で約定処理 -> FILLED/UNFILLED 更新"
+# Task 3: 9:15 -- 約定処理（当日始値で執行）
+# 09:00 市場オープンから15分バッファ。yfinance fast_info キャッシュが追いつくのを待つ
+Register-KabuTask -TaskName "KabuSimulation_Execute" -ScriptFile "execute.py" -Time "09:15AM" -Description "日本株シミュレーション Step3: 9:15 当日始値で約定処理 -> FILLED/UNFILLED 更新"
 
 Write-Host ""
 Write-Host "登録済みタスク確認:"
