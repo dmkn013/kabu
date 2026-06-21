@@ -1,0 +1,23 @@
+{
+  "date": "2026-06-22",
+  "orders": [
+    {
+      "symbol": "2471",
+      "action": "BUY",
+      "shares": 100,
+      "limit_price": 252.0
+    },
+    {
+      "symbol": "8095",
+      "action": "BUY",
+      "shares": 100,
+      "limit_price": 508.0
+    },
+    {
+      "symbol": "543",
+      "action": "SHORT",
+      "shares": 100,
+      "limit_price": 290.0
+    }
+  ]
+}
