@@ -1,0 +1,15 @@
+2026-06-22 11:00:01,586 INFO [healthcheck] 2026-06-22 開始
+
+=== Healthcheck 2026-06-22 ===
+[PASS] A. スケジューラ: Decide=0, Execute=0, Research=0, Healthcheck=267009(実行中)
+[PASS] B. gitコミット: decide=あり, execute=あり
+[PASS] C. データ鮮度: daily_summary=2026-06-22, portfolio=2026-06-22
+[PASS] D. shortlist.json: date=2026-06-22(本日decide用), count=76
+[PASS] E. GitHub Actions: completed/success
+[PASS] F. 取引データ整合性: UNFILLED+price空=2件(run_001: 543 SHORT UNFILLED / 仕様通りpriceなし正常)
+[PASS] G. フロントエンド: runs.json=200 OK, market_prices.json=200 OK, データ正常配信確認
+
+修正内容:
+- なし
+
+総合判定: OK
