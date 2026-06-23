@@ -1,0 +1,35 @@
+{
+  "date": "2026-06-24",
+  "orders": [
+    {
+      "symbol": "2492",
+      "action": "SELL",
+      "shares": 100,
+      "limit_price": 365.0
+    },
+    {
+      "symbol": "6440",
+      "action": "SELL",
+      "shares": 100,
+      "limit_price": 540.0
+    },
+    {
+      "symbol": "7201",
+      "action": "SHORT",
+      "shares": 100,
+      "limit_price": 300.0
+    },
+    {
+      "symbol": "9501",
+      "action": "SHORT",
+      "shares": 100,
+      "limit_price": 465.0
+    },
+    {
+      "symbol": "4714",
+      "action": "BUY",
+      "shares": 100,
+      "limit_price": 198.0
+    }
+  ]
+}
