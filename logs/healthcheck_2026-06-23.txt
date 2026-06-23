@@ -1,0 +1,18 @@
+2026-06-23 11:00:01,745 INFO [healthcheck] 2026-06-23 開始
+
+=== Healthcheck 2026-06-23 ===
+[PASS] A. スケジューラ: Decide=0, Execute=0, Research=0, Healthcheck=267009(実行中)
+[PASS] B. gitコミット: decide=あり, execute=あり
+[FAIL] C. データ鮮度: daily_summary=2026-06-23(両RUN), portfolio=run_001:2026-06-23/run_002:2026-06-22→修正済み
+[PASS] D. shortlist.json: date=2026-06-23, count=77
+[PASS] E. GitHub Actions: completed/success
+[PASS] F. 取引データ整合性: UNFILLED+price空=0件
+[PASS] G. フロントエンド: index.html=200 OK, 静的エラーなし(JS動的ロード構造で正常)
+
+修正内容:
+- run_002のpending_orders.jsonが残存しており本日分の約定処理が未完了だった
+- execute.py --force を手動実行し、run_002の6注文(COVER×2, BUY×2, SHORT×2)を全てFILLEDに約定
+- run_002/portfolio.json の last_updated が 2026-06-22 → 2026-06-23 に更新
+- run_002/trades.csv に 2026-06-23 09:05 の約定行を追記
+
+総合判定: FIXED
