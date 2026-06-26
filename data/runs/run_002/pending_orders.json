@@ -1,0 +1,11 @@
+{
+  "date": "2026-06-26",
+  "orders": [
+    {
+      "symbol": "4813",
+      "action": "COVER",
+      "shares": 100,
+      "limit_price": 342.0
+    }
+  ]
+}
