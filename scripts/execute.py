@@ -96,12 +96,12 @@ def update_trades_csv(run_dir: Path, today_str: str, results: list[dict]) -> Non
                 row['cash_after'] = str(int(r['cash_after']))
             rows.append(row)
 
-    tmp = csv_path.with_suffix('.tmp')
-    with open(tmp, 'w', encoding='utf-8', newline='') as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
-        w.writeheader()
-        w.writerows(rows)
-    tmp.replace(csv_path)
+    import io as _io
+    buf = _io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=fieldnames)
+    w.writeheader()
+    w.writerows(rows)
+    csv_path.write_text(buf.getvalue(), encoding='utf-8')
 
 
 def append_force_close_trades(run_dir: Path, today_str: str, trades: list[dict]) -> None:

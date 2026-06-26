@@ -1,0 +1,4 @@
+2026-06-24 11:00:02,468 INFO [healthcheck] 2026-06-24 開始
+2026-06-24 11:00:07,048 INFO You've hit your session limit · resets 1:30pm (Asia/Tokyo)
+
+2026-06-24 11:00:07,049 INFO [healthcheck] Claude 終了 (exit=1)

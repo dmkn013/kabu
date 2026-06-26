@@ -1,0 +1,4 @@
+2026-06-25 11:00:02,162 INFO [healthcheck] 2026-06-25 開始
+2026-06-25 11:00:06,599 INFO You've hit your weekly limit · resets 10am (Asia/Tokyo)
+
+2026-06-25 11:00:06,601 INFO [healthcheck] Claude 終了 (exit=1)

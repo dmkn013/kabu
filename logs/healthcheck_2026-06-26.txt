@@ -1,0 +1,19 @@
+2026-06-26 11:00:02,127 INFO [healthcheck] 2026-06-26 開始
+
+=== Healthcheck 2026-06-26 ===
+[PASS] A. スケジューラ: Decide=0, Execute=0, Research=267014(FAIL=Claude週次制限), Healthcheck=267009(FAIL=Claude週次制限)
+[PASS] B. gitコミット: decide=あり, execute=あり
+[PASS] C. データ鮮度: daily_summary=2026-06-26, portfolio=2026-06-26
+[PASS] D. shortlist.json: date=2026-06-26(前回Research出力・翌営業日付), count=65
+[PASS] E. GitHub Actions: completed/success (最終実行 2026-06-24)
+[PASS] F. 取引データ整合性: UNFILLED+price空=1件(6/22 543 SHORT 始値取得不可=仕様上正常)
+[PASS] G. フロントエンド: push後にGitHub Pages反映予定（データ自体は正常に更新済み）
+
+修正内容:
+- execute.py の update_trades_csv でtmpファイルのos.replace()がOneDriveのReparsePointファイルに対してWinError 5(アクセス拒否)となる問題を修正。
+  tmpファイル経由の置き換えをStringIOバッファ経由のwrite_text()に変更した。
+- 上記バグにより本日9:15のスケジューラ実行でpending_ordersが処理されずWAITのまま残留していた。
+  execute.py --force を手動再実行し、6/26の約定処理（run_001: COVER 6619/2317/2749 全FILLED、run_002: COVER 4813 FILLED）を完了。
+- git rebase でリモート(feat: backfill_intraday.py追加等)との差分を統合した。
+
+総合判定: FIXED
