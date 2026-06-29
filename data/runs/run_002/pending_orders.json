@@ -1,0 +1,41 @@
+{
+  "date": "2026-06-30",
+  "orders": [
+    {
+      "symbol": "2353",
+      "action": "BUY",
+      "shares": 100,
+      "limit_price": 257.0
+    },
+    {
+      "symbol": "7593",
+      "action": "BUY",
+      "shares": 100,
+      "limit_price": 457.0
+    },
+    {
+      "symbol": "4574",
+      "action": "BUY",
+      "shares": 100,
+      "limit_price": 287.0
+    },
+    {
+      "symbol": "2492",
+      "action": "BUY",
+      "shares": 100,
+      "limit_price": 391.0
+    },
+    {
+      "symbol": "6472",
+      "action": "SHORT",
+      "shares": 100,
+      "limit_price": 398.0
+    },
+    {
+      "symbol": "7201",
+      "action": "COVER",
+      "shares": 100,
+      "limit_price": 304.0
+    }
+  ]
+}
