@@ -1,0 +1,15 @@
+2026-06-29 11:00:01,777 INFO [healthcheck] 2026-06-29 開始
+
+=== Healthcheck 2026-06-29 ===
+[PASS] A. スケジューラ: Decide=0(成功), Execute=0(成功), Research=0(成功), Healthcheck=267009(失敗:前回エラー終了)
+[PASS] B. gitコミット: decide=あり([decide] 2026-06-29), execute=あり([execute] 2026-06-29)
+[PASS] C. データ鮮度: daily_summary=2026-06-29, portfolio=2026-06-29
+[PASS] D. shortlist.json: date=2026-06-29, count=75
+[PASS] E. GitHub Actions: completed/success ([execute] 2026-06-29)
+[PASS] F. 取引データ整合性: UNFILLED+price空=1件(run_001 2026-06-22 銘柄543 SHORT UNFILLED - 始値取得不可による正常UNFILLED、TopixマスタにもOHLCVにも存在しない銘柄のため遡及修正対象外)
+[PASS] G. フロントエンド: portfolio.json=OK(last_updated=2026-06-29), daily_summary=OK(最終行2026-06-29), index.html=HTTP 200(JS動的描画のため静的確認のみ)
+
+修正内容:
+- なし
+
+総合判定: OK
