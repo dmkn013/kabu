@@ -1,0 +1,35 @@
+{
+  "date": "2026-07-03",
+  "orders": [
+    {
+      "symbol": "4005",
+      "action": "COVER",
+      "shares": 100,
+      "limit_price": 526.0
+    },
+    {
+      "symbol": "7201",
+      "action": "COVER",
+      "shares": 100,
+      "limit_price": 314.0
+    },
+    {
+      "symbol": "2317",
+      "action": "COVER",
+      "shares": 100,
+      "limit_price": 409.0
+    },
+    {
+      "symbol": "7238",
+      "action": "COVER",
+      "shares": 100,
+      "limit_price": 111.0
+    },
+    {
+      "symbol": "2930",
+      "action": "BUY",
+      "shares": 100,
+      "limit_price": 120.0
+    }
+  ]
+}
