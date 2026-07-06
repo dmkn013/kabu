@@ -1,0 +1,18 @@
+2026-07-06 11:00:02,134 INFO [healthcheck] 2026-07-06 開始
+
+=== Healthcheck 2026-07-06 ===
+[PASS] A. スケジューラ: Decide=0(成功), Execute=0(成功), Research=0(成功), Healthcheck=267009(実行中/競合)
+[PASS] B. gitコミット: decide=あり, execute=あり
+[PASS] C. データ鮮度: daily_summary=2026-07-06(run_001,run_002), portfolio=2026-07-06(run_001,run_002)
+[PASS] D. shortlist.json: date=2026-07-06, count=11
+[PASS] E. GitHub Actions: completed/success ([execute] 2026-07-06)
+[WARN] F. 取引データ整合性: UNFILLED+price空=2件 (run_002: 4005 COVER 2026-07-02, 2026-07-03)
+[PASS] G. フロントエンド: runs.json=OK, portfolio.json=OK, データファイル正常取得確認済み
+
+修正内容:
+- なし（F の UNFILLED+price空 2件は 4005 COVER の指値条件不成立による正常な UNFILLED。
+  当該ポジションは 2026-07-06 に FILLED で決済済みのため現在の整合性に問題なし。
+  Healthcheck タスクの 267009 エラーは本エージェントとの実行競合によるもので、
+  スケジューラ自体の障害ではない。）
+
+総合判定: OK
