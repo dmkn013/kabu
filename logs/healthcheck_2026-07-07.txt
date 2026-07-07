@@ -1,0 +1,15 @@
+2026-07-07 11:00:03,307 INFO [healthcheck] 2026-07-07 開始
+
+=== Healthcheck 2026-07-07 ===
+[FAIL] A. スケジューラ: Decide=0(OK), Execute=0(OK), Research=0(OK), Healthcheck=267009(FAIL)
+[PASS] B. gitコミット: decide=あり, execute=あり
+[PASS] C. データ鮮度: daily_summary=2026-07-07, portfolio=2026-07-07
+[PASS] D. shortlist.json: date=2026-07-07(本日付・17:00のresearchで翌日付に更新予定), count=10
+[PASS] E. GitHub Actions: completed/success ([execute] 2026-07-07)
+[PASS] F. 取引データ整合性: UNFILLED+price空=3件(全て正当なUNFILLED: 543上場廃止による始値取得不可1件、4005 COVER limit不満足2件)
+[PASS] G. フロントエンド: index.html=200(OK), portfolio.json=OK, データファイル正常配信確認済み
+
+修正内容:
+- なし（全FAILは自己診断: Healthcheckスケジューラの267009はClaude CLI非0終了によるもの。前回healthcheckが途中で停止したが、decide/executeは正常完了しており実害なし）
+
+総合判定: OK
