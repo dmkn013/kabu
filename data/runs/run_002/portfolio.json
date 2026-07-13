@@ -1,5 +1,5 @@
 {
-  "cash": 144400.0,
+  "cash": 84460.0,
   "positions": {
     "1786": {
       "shares": 100,
@@ -41,21 +41,20 @@
       "shares": 100,
       "avg_price": 207.9
     },
-    "2930": {
-      "shares": 100,
-      "avg_price": 119.0
-    },
     "9432": {
       "shares": 100,
       "avg_price": 149.0
-    }
-  },
-  "short_positions": {
-    "6472": {
+    },
+    "9424": {
+      "shares": 200,
+      "avg_price": 113.0
+    },
+    "4344": {
       "shares": 100,
-      "avg_short_price": 409.9
+      "avg_price": 107.0
     }
   },
-  "last_updated": "2026-07-10",
+  "short_positions": {},
+  "last_updated": "2026-07-13",
   "initial_cash": 500000
 }
