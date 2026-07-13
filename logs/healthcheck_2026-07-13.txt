@@ -1,0 +1,15 @@
+2026-07-13 11:00:02,867 INFO [healthcheck] 2026-07-13 開始
+
+=== Healthcheck 2026-07-13 ===
+[PASS] A. スケジューラ: Decide=0, Execute=0, Research=0, Healthcheck=267009(実行中=正常)
+[PASS] B. gitコミット: decide=あり, execute=あり
+[PASS] C. データ鮮度: daily_summary=2026-07-13(run_001,run_002), portfolio=2026-07-13(run_001,run_002)
+[PASS] D. shortlist.json: date=2026-07-13, count=11
+[PASS] E. GitHub Actions: completed/success ([execute] 2026-07-13)
+[PASS] F. 取引データ整合性: UNFILLED+price空=6件(すべて価格条件未達による正常キャンセル。run_001: 543/SHORT@2026-06-22, 4574/SELL@2026-07-08; run_002: 4005/COVER@2026-07-02,03, 8203/SELL@2026-07-08, 4574/SELL@2026-07-08)
+[PASS] G. フロントエンド: runs.json=OK(200), market_prices.json=OK(200), 構造正常(動的データはJS実行で描画)
+
+修正内容:
+- なし
+
+総合判定: OK
