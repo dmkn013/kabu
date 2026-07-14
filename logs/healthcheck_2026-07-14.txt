@@ -1,0 +1,22 @@
+2026-07-14 11:00:02,885 INFO [healthcheck] 2026-07-14 開始
+
+=== Healthcheck 2026-07-14 ===
+[PASS] A. スケジューラ: Decide=0, Execute=0, Research=0, Healthcheck=267009(実行中の自身)
+[PASS] B. gitコミット: decide=あり, execute=あり
+[PASS] C. データ鮮度: daily_summary=2026-07-14, portfolio=2026-07-14
+[PASS] D. shortlist.json: date=2026-07-14(07-13月曜→翌営業日07-14), count=13
+[PASS] E. GitHub Actions: completed/success (最新5件すべてsuccess)
+[NOTE] F. 取引データ整合性: UNFILLED+price空=6件
+         run_001: 543 SHORT 2026-06-22 (OHLCVなし→正常UNFILLED)
+         run_001: 4574 SELL 2026-07-08 (1分足取得失敗→UNFILLED、2026-07-13に再SELL FILLED済み、整合OK)
+         run_002: 4005 COVER 2026-07-02 (始値533.7>limit528→指値未到達、正常UNFILLED)
+         run_002: 4005 COVER 2026-07-03 (始値550.0>limit526→指値未到達、正常UNFILLED)
+         run_002: 8203 SELL 2026-07-08 (1分足取得失敗→UNFILLED、現在もポジション保有中、整合OK)
+         run_002: 4574 SELL 2026-07-08 (1分足取得失敗→UNFILLED、2026-07-10に再SELL FILLED済み、整合OK)
+         price空はexecute.pyの1分足取得失敗時の正常動作。後続トレードで整合性は維持されている。
+[PASS] G. フロントエンド: GitHub Pages正常, portfolio.json=OK(last_updated=2026-07-14, cash=58270), CSV=OK(BOMなし)
+
+修正内容:
+- なし（6件のUNFILLED+price空はすべて正常動作または後続で整合済みと確認）
+
+総合判定: OK
