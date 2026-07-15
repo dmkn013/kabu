@@ -1,0 +1,15 @@
+2026-07-15 11:00:02,941 INFO [healthcheck] 2026-07-15 開始
+
+=== Healthcheck 2026-07-15 ===
+[PASS] A. スケジューラ: Decide=0, Execute=0, Research=0, Healthcheck=0x41301(実行中=正常)
+[PASS] B. gitコミット: decide=あり, execute=あり
+[PASS] C. データ鮮度: daily_summary=2026-07-15, portfolio=2026-07-15
+[PASS] D. shortlist.json: date=2026-07-15(昨日research生成の翌営業日分), count=12
+[PASS] E. GitHub Actions: completed/success ([execute] 2026-07-15)
+[PASS] F. 取引データ整合性: UNFILLED+price空=6件（全て仕様上の正常ケース: SELL/COVERはlimit_price条件不成立による即キャンセル、SHORTの1件はOHLCVキャッシュなし銘柄543で修正不可）
+[PASS] G. フロントエンド: GitHub Pages デプロイ済み(GH Actions success)、BOMなし、データファイル正常
+
+修正内容:
+- なし
+
+総合判定: OK
