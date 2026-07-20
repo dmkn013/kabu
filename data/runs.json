@@ -17,6 +17,24 @@
       "start_date": "2026-06-19",
       "end_date": "2026-08-14",
       "initial_cash": 500000
+    },
+    {
+      "id": "run_003",
+      "name": "Run 3",
+      "status": "active",
+      "created_at": "2026-07-20",
+      "start_date": "2026-07-21",
+      "end_date": "2026-09-14",
+      "initial_cash": 500000
+    },
+    {
+      "id": "run_004",
+      "name": "Run 4",
+      "status": "active",
+      "created_at": "2026-07-20",
+      "start_date": "2026-07-21",
+      "end_date": "2026-09-14",
+      "initial_cash": 500000
     }
   ]
 }
