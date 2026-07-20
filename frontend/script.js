@@ -1,5 +1,7 @@
 'use strict';
 
+if (window.ChartZoom) Chart.register(window.ChartZoom);
+
 const RUNS_URL     = '../data/runs.json';
 const NAMES_URL    = '../data/topix_symbols.json';
 const PRICES_URL   = '../data/market_prices.json';
@@ -378,6 +380,13 @@ function _makeChart(canvasId, labels, data, label, color, bgColor) {
             label: ctx => label + ': ¥' + Math.round(ctx.raw).toLocaleString('ja-JP'),
           },
         },
+        zoom: {
+          zoom: {
+            drag: { enabled: true, modifierKey: null },
+            mode: 'y',
+          },
+          pan: { enabled: false },
+        },
       },
       scales: {
         x: { ticks: { maxTicksLimit: 12, maxRotation: 30 } },
@@ -385,6 +394,10 @@ function _makeChart(canvasId, labels, data, label, color, bgColor) {
       },
     },
   });
+  canvas.ondblclick = () => {
+    const c = Chart.getChart(canvas);
+    if (c) c.resetZoom();
+  };
 }
 
 // ---- 自動更新 ----
