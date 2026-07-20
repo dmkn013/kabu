@@ -345,11 +345,11 @@ function renderChart(summary, intraday, initialCash) {
     cashData   = [initialCash, ...sorted.map(d => byDate[d])];
   }
 
-  _makeChart('total-chart', totalLabels, totalData, '総資産',   '#e63946', 'rgba(230,57,70,0.07)');
+  _makeChart('total-chart', totalLabels, totalData, '総資産',   '#e63946', 'rgba(230,57,70,0.07)', { pointRadius: 0 });
   _makeChart('cash-chart',  cashLabels,  cashData,  '現金残高', '#1a6fc9', 'rgba(26,111,201,0.07)');
 }
 
-function _makeChart(canvasId, labels, data, label, color, bgColor) {
+function _makeChart(canvasId, labels, data, label, color, bgColor, opts = {}) {
   const canvas   = document.getElementById(canvasId);
   if (!canvas) return;
   const existing = Chart.getChart(canvas);
@@ -364,7 +364,7 @@ function _makeChart(canvasId, labels, data, label, color, bgColor) {
         borderColor: color,
         backgroundColor: bgColor,
         borderWidth: 2,
-        pointRadius: 3,
+        pointRadius: opts.pointRadius ?? 3,
         pointHoverRadius: 5,
         fill: true,
         tension: 0,
