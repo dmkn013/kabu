@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-intraday.csv を遡及生成する。
-trades.csv からポートフォリオ状態を再構築し、
-yfinance の30分足データから評価額を算出して intraday.csv に補完する。
+intraday.csv を任意期間で遡及生成する。
+trades.csv からポートフォリオ状態を再構築し、yfinance の30分足データから
+評価額を算出して intraday.csv の 09:00 単発行を 09:00〜15:30 30分おきに置き換える。
 
-  uv run python scripts/backfill_intraday.py
+  uv run python scripts/backfill_intraday_range.py --start 2026-06-20 --end 2026-07-20
 """
 import sys, io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-import csv, json, logging, subprocess
+import argparse, csv, json, logging, subprocess
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -33,9 +33,6 @@ def load_trades(run_dir: Path) -> list[dict]:
 
 
 def reconstruct_states(trades: list[dict], initial_cash: float) -> dict[str, tuple]:
-    """各日の execute 後のポートフォリオ状態を再構築する。
-    Returns: {date_str: (cash, {sym: shares}, {sym: shares})}
-    """
     cash = initial_cash
     longs: dict[str, int] = {}
     shorts: dict[str, int] = {}
@@ -72,10 +69,15 @@ def reconstruct_states(trades: list[dict], initial_cash: float) -> dict[str, tup
     return states
 
 
+def state_on_or_before(states: dict[str, tuple], d: str):
+    """d 以前で最も新しい state を返す（当日の trade がない日向け）。"""
+    keys = [k for k in states if k <= d]
+    if not keys:
+        return None
+    return states[max(keys)]
+
+
 def fetch_close_prices(symbols: list[str], start: str, end: str) -> pd.DataFrame:
-    """yfinance 30分足の Close 価格を JST タイムゾーン付きで返す。
-    Returns DataFrame: index=JST datetime, columns=symbol (without .T)
-    """
     tickers = [f'{s}.T' for s in symbols]
     df = yf.download(tickers, start=start, end=end, interval='30m',
                      progress=False, auto_adjust=True)
@@ -120,15 +122,34 @@ def write_intraday(intraday_path: Path, rows: list[dict]) -> None:
         writer.writeheader()
         writer.writerows(deduped)
 
-    logger.info(f'  → {intraday_path.name}: {len(deduped)} rows')
+    logger.info(f'  -> {intraday_path.name}: {len(deduped)} rows')
+
+
+def business_days(start: date, end: date) -> list[str]:
+    days = []
+    d = start
+    while d <= end:
+        if d.weekday() < 5:
+            days.append(d.isoformat())
+        d += timedelta(days=1)
+    return days
 
 
 def main() -> None:
-    runs_data = json.loads((REPO_ROOT / 'data' / 'runs.json').read_text(encoding='utf-8'))
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--start', required=True, help='YYYY-MM-DD (inclusive)')
+    ap.add_argument('--end', required=True, help='YYYY-MM-DD (inclusive)')
+    args = ap.parse_args()
 
-    backfill_dates = ['2026-06-22', '2026-06-23', '2026-06-24']
-    fetch_start = '2026-06-22'
-    fetch_end = '2026-06-25'
+    start_d = date.fromisoformat(args.start)
+    end_d = date.fromisoformat(args.end)
+    backfill_dates = business_days(start_d, end_d)
+
+    # yfinance 30m interval だけ与えるとその日の分が欠けることがあるので end を +1 日
+    fetch_start = args.start
+    fetch_end = (end_d + timedelta(days=1)).isoformat()
+
+    runs_data = json.loads((REPO_ROOT / 'data' / 'runs.json').read_text(encoding='utf-8'))
 
     for run in runs_data.get('runs', []):
         if run.get('status') != 'active':
@@ -144,11 +165,11 @@ def main() -> None:
         trades = load_trades(run_dir)
         states = reconstruct_states(trades, initial_cash)
 
-        # 全期間で必要な銘柄を収集
         all_syms: set[str] = set()
         for d in backfill_dates:
-            if d in states:
-                _, longs, shorts = states[d]
+            st = state_on_or_before(states, d)
+            if st:
+                _, longs, shorts = st
                 all_syms.update(longs)
                 all_syms.update(shorts)
 
@@ -163,16 +184,18 @@ def main() -> None:
             continue
 
         existing_rows = load_intraday(intraday_path)
-        existing_dts = {r['datetime'] for r in existing_rows}
-        logger.info(f'  既存 intraday: {len(existing_rows)} rows')
+        # 対象期間内の既存 09:00 単発行は置き換えるため除外し、期間外の行だけ残す
+        kept_rows = [r for r in existing_rows if not (args.start <= r['datetime'][:10] <= args.end)]
+        logger.info(f'  既存 intraday: {len(existing_rows)} rows -> 期間内 {len(existing_rows) - len(kept_rows)} rows を再生成対象として除外')
 
         new_rows: list[dict] = []
         for d in backfill_dates:
-            if d not in states:
+            st = state_on_or_before(states, d)
+            if st is None:
                 logger.warning(f'  {d}: state なし、スキップ')
                 continue
+            cash, longs, shorts = st
 
-            cash, longs, shorts = states[d]
             day = date.fromisoformat(d)
             day_start = datetime(day.year, day.month, day.day, 9, 0, tzinfo=JST)
             day_end = datetime(day.year, day.month, day.day, 15, 30, tzinfo=JST)
@@ -184,8 +207,6 @@ def main() -> None:
             count = 0
             for ts, price_row in day_df.iterrows():
                 dt_str = ts.strftime('%Y-%m-%d %H:%M')
-                if dt_str in existing_dts:
-                    continue
 
                 prices: dict[str, float] = {}
                 for sym in list(longs) + list(shorts):
@@ -197,7 +218,7 @@ def main() -> None:
                 long_val = sum(sh * prices.get(sym, 0) for sym, sh in longs.items())
                 short_exp = sum(sh * prices.get(sym, 0) for sym, sh in shorts.items())
 
-                if long_val == 0 and short_exp == 0:
+                if long_val == 0 and short_exp == 0 and (longs or shorts):
                     continue
 
                 new_rows.append({
@@ -209,17 +230,16 @@ def main() -> None:
                 })
                 count += 1
 
-            logger.info(f'  {d}: {count} 件追加')
+            logger.info(f'  {d}: {count} 件生成')
 
         if new_rows:
-            write_intraday(intraday_path, existing_rows + new_rows)
+            write_intraday(intraday_path, kept_rows + new_rows)
         else:
             logger.info('  追加なし')
 
-    # git commit & push
     subprocess.run(['git', 'add', 'data/'], check=False, cwd=str(REPO_ROOT))
     result = subprocess.run(
-        ['git', 'commit', '-m', '[backfill] intraday 6/22-6/24 遡及生成'],
+        ['git', 'commit', '-m', f'[backfill] intraday {args.start}~{args.end} 30分足で再生成'],
         check=False, cwd=str(REPO_ROOT), capture_output=True, text=True,
     )
     out = (result.stdout + result.stderr).strip()

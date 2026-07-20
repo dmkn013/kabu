@@ -49,14 +49,6 @@ def upsert_ohlcv_csv(symbol: str, new_df: pd.DataFrame) -> None:
     save_ohlcv_csv(symbol, merged)
 
 
-def last_ohlcv_date(symbol: str):
-    """CSV の最終日付（date）を返す。無ければ None。"""
-    df = load_ohlcv_csv(symbol)
-    if df is None or df.empty:
-        return None
-    return pd.to_datetime(df.index).max().date()
-
-
 def download_daily(
     symbols: list[str], start: str, end: str, chunk: int = 100
 ) -> dict[str, pd.DataFrame]:
@@ -210,14 +202,3 @@ def fetch_opening_prices_1m(symbols: list[str], max_retries: int = 3, retry_wait
     if not result:
         logger.error("全銘柄の始値取得失敗")
     return result
-
-
-def format_ohlcv_for_prompt(sym: str, df: pd.DataFrame, last_n: int = 5) -> str:
-    lines = [f"{sym}:"]
-    for dt, row in df.tail(last_n).iterrows():
-        date_str = dt.strftime('%Y-%m-%d') if hasattr(dt, 'strftime') else str(dt)[:10]
-        lines.append(
-            f"  {date_str}: O={int(row['Open'])} H={int(row['High'])} "
-            f"L={int(row['Low'])} C={int(row['Close'])} V={int(row['Volume']):,}"
-        )
-    return '\n'.join(lines)
