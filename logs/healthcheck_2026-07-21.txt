@@ -1,0 +1,20 @@
+2026-07-21 11:00:02,868 INFO [healthcheck] 2026-07-21 開始
+
+=== Healthcheck 2026-07-21 ===
+[PASS] A. スケジューラ: Decide=0(成功), Execute=0(成功), Research=0(成功), Healthcheck=267009(失敗→本スクリプトが代行)
+[PASS] B. gitコミット: decide=あり, execute=あり
+[PASS] C. データ鮮度: daily_summary=2026-07-21(全4run), portfolio=2026-07-21(全4run)
+[FAIL→FIXED] D. shortlist.json: date=2026-07-21(修正前count=0) → 修正後 date=2026-07-22, count=80
+[PASS] E. GitHub Actions: completed/success (直近5件すべて成功)
+[WARN] F. 取引データ整合性: UNFILLED+price空=6件(run_001:2件, run_002:4件)
+       - 543(SHORT 2026-06-22): OHLCVなし→始値取得不可による正常UNFILLED、修正不要
+       - 4574(SELL 2026-07-08), 4005(COVER 2026-07-02/03), 8203(SELL 2026-07-08): 始値あり→指値条件不一致による正常UNFILLED、修正不要
+[PASS] G. フロントエンド: portfolio.json=OK, daily_summary.csv=OK(最終行2026-07-21), market_prices.json=OK(2026-07-21 11:00更新)
+       ※WebFetchはJS非実行環境のため初期HTMLを返すが、GitHub Pages上のJSONデータは正常に配信済み
+
+修正内容:
+- scripts/research.py: _load_sim_context() で価格フィルターに現在残高(min_cash)ではなくinitial_cashを使用するよう修正
+  (run_001のcash=32,730円が最小値となりフィルター上限=98円/株になり全銘柄除外されていた)
+- research.py を手動再実行: shortlist.json を date=2026-07-22, count=80件 に更新
+
+総合判定: FIXED

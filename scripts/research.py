@@ -93,14 +93,8 @@ def _load_sim_context(today: date) -> dict:
     ctx['sim_start'] = min(date.fromisoformat(r['start_date']) for r in active)
     ctx['sim_end'] = max(date.fromisoformat(r['end_date']) for r in active)
 
-    min_cash = float('inf')
-    for r in active:
-        pf_path = REPO_ROOT / 'data' / 'runs' / r['id'] / 'portfolio.json'
-        if pf_path.exists():
-            pf = json.loads(pf_path.read_text(encoding='utf-8'))
-            min_cash = min(min_cash, pf.get('cash', ctx['min_cash']))
-    if min_cash < float('inf'):
-        ctx['min_cash'] = min_cash
+    # 価格フィルターには initial_cash を使う（現在の残高ではなくシミュレーション初期資金）
+    # 現在残高が少ないRunがあっても他のRunが購入可能な銘柄を除外しないため
 
     def _count_biz_days(d1: date, d2: date) -> int:
         n, d = 0, d1
