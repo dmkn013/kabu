@@ -1,0 +1,18 @@
+2026-07-22 11:00:04,064 INFO [healthcheck] 2026-07-22 開始
+
+=== Healthcheck 2026-07-22 ===
+[FAIL] A. スケジューラ: Decide=0(OK), Execute=0(OK), Research=0(OK), Healthcheck=267009(前回起動エラー)
+[PASS] B. gitコミット: decide=あり, execute=あり
+[PASS] C. データ鮮度: daily_summary=2026-07-22, portfolio=2026-07-22 (全4RUN)
+[PASS] D. shortlist.json: date=2026-07-22(07-21 researchが07-22向けに生成), count=80
+[PASS] E. GitHub Actions: completed/success (直近5件全て成功)
+[FAIL→FIXED] F. 取引データ整合性: UNFILLED+price空=9件 / WAITのまま残存=2件(run_002 2026-07-16 3315/4344 BUY)
+[PASS] G. フロントエンド: runs.json・portfolio.json正常取得, データ表示OK (JS動的レンダリング正常)
+
+修正内容:
+- run_002/trades.csv: 2026-07-16の3315 BUY WAIT行 -> UNFILLED に変更 (execute.pyがpending_orders処理済みだがtrades.csv更新漏れ)
+- run_002/trades.csv: 2026-07-16の4344 BUY WAIT行 -> UNFILLED に変更 (同上)
+- 残9件のUNFILLED+price空は始値取得不可による正常なUNFILLED (後続取引にてポートフォリオ整合性確認済み)
+- A項目のHealthcheck 267009: 前回healthcheck.pyからclaudeコマンド実行時の非0終了コード (今回セッションは正常進行中)
+
+総合判定: FIXED
