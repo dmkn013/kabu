@@ -1,0 +1,20 @@
+2026-07-24 11:00:01,931 INFO [healthcheck] 2026-07-24 開始
+
+=== Healthcheck 2026-07-24 ===
+[FAIL] A. スケジューラ: Decide=0(OK), Execute=0(OK), Research=3221225786(FAIL), Healthcheck=267009(FAIL)
+[PASS] B. gitコミット: decide=あり, execute=あり
+[PASS] C. データ鮮度: daily_summary=2026-07-24(全run), portfolio=2026-07-24(全run)
+[PASS] D. shortlist.json: date=2026-07-23(翌営業日付として正常), count=80
+[PASS] E. GitHub Actions: completed/success
+[PASS] F. 取引データ整合性: UNFILLED+price空=9件(過去日分のみ、当日新規なし)
+[PASS] G. フロントエンド: データファイル配信正常、JS/HTMLフレーム正常(WebFetch=静的HTML確認)
+
+修正内容:
+- execute.py --force を手動再実行し、run_001・run_002 の daily_summary.csv(2026-07-24行)および portfolio.json(last_updated=2026-07-24)を更新
+- run_004 daily_summary.csv の 2026-07-24 重複行を1行に修正
+
+未解決:
+- KabuSimulation_Research の終了コード 3221225786(0xC0000602): update_ohlcv.py の昨日(07/23)実行時のクラッシュ。本日17:00の定期実行で再試行予定。update_ohlcv.py は現在バックグラウンドで実行中。
+- KabuSimulation_Healthcheck/Snapshot の終了コード 267009: 本ヘルスチェック実行前の自律エージェント実行時のエラー（claude_agent.py の異常終了の可能性）
+
+総合判定: FIXED
